@@ -17,9 +17,8 @@ desktop.ini
 node_modules/
 package-lock.json
 
-# Composer (if we ever add it)
-vendor/
-composer.lock
+# Composer
+/vendor/
 
 # Debug/logs
 *.log
@@ -32,6 +31,7 @@ debug.log
 # Temporary files
 *.tmp
 *.bak
+*.old
 *.swp
 *~
 
