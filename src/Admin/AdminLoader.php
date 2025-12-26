@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace BBAB\ServiceCenter\Admin;
 
 use BBAB\ServiceCenter\Admin\Workbench\WorkbenchPage;
+use BBAB\ServiceCenter\Admin\Pages\ClientHealthDashboard;
 use BBAB\ServiceCenter\Utils\Logger;
 
 /**
@@ -22,12 +23,21 @@ class AdminLoader {
     private WorkbenchPage $workbench;
 
     /**
+     * Client Health Dashboard instance.
+     */
+    private ClientHealthDashboard $health_dashboard;
+
+    /**
      * Register all admin hooks.
      */
     public function register(): void {
         // Initialize workbench
         $this->workbench = new WorkbenchPage();
         $this->workbench->register();
+
+        // Initialize Client Health Dashboard
+        $this->health_dashboard = new ClientHealthDashboard();
+        $this->health_dashboard->register();
 
         // Register assets
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);

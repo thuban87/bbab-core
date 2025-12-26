@@ -11,6 +11,7 @@ use BBAB\ServiceCenter\Frontend\Shortcodes\Dashboard\Billing;
 use BBAB\ServiceCenter\Frontend\Shortcodes\Dashboard\ActiveProjects;
 use BBAB\ServiceCenter\Frontend\Shortcodes\Dashboard\ServiceRequests;
 use BBAB\ServiceCenter\Frontend\Shortcodes\Dashboard\Roadmap;
+use BBAB\ServiceCenter\Frontend\Shortcodes\Analytics\ClientAnalytics;
 use BBAB\ServiceCenter\Utils\Logger;
 
 /**
@@ -65,6 +66,8 @@ class FrontendLoader {
             ActiveProjects::class,
             ServiceRequests::class,
             Roadmap::class,
+            // Analytics shortcodes
+            ClientAnalytics::class,
         ];
 
         foreach ($shortcode_classes as $class) {
