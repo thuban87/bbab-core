@@ -151,4 +151,150 @@ class Cache {
     public static function has(string $key): bool {
         return self::get($key) !== null;
     }
+
+    /**
+     * Register cache invalidation hooks.
+     *
+     * Call this once during plugin initialization to automatically clear
+     * relevant caches when posts are saved or deleted.
+     */
+    public static function registerInvalidationHooks(): void {
+        // Service Request hooks
+        add_action('save_post_service_request', [self::class, 'invalidateServiceRequestCache']);
+
+        // Project hooks
+        add_action('save_post_project', [self::class, 'invalidateProjectCache']);
+
+        // Invoice hooks
+        add_action('save_post_invoice', [self::class, 'invalidateInvoiceCache']);
+
+        // Milestone hooks
+        add_action('save_post_milestone', [self::class, 'invalidateMilestoneCache']);
+
+        // Time Entry hooks
+        add_action('save_post_time_entry', [self::class, 'invalidateTimeEntryCache']);
+
+        // Delete hook (handles all post types)
+        add_action('delete_post', [self::class, 'invalidateOnDelete'], 10, 2);
+
+        Logger::debug('Cache', 'Invalidation hooks registered');
+    }
+
+    /**
+     * Invalidate service request related caches.
+     */
+    public static function invalidateServiceRequestCache(int $post_id): void {
+        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+            return;
+        }
+
+        self::flushPattern('open_srs');
+        self::flushPattern('sr_');
+        self::flushPattern('workbench_open_srs');
+        self::flushPattern('requests_summary');
+
+        Logger::debug('Cache', 'Invalidated SR cache for post ' . $post_id);
+    }
+
+    /**
+     * Invalidate project related caches.
+     */
+    public static function invalidateProjectCache(int $post_id): void {
+        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+            return;
+        }
+
+        self::flushPattern('active_projects');
+        self::flushPattern('project_');
+        self::flushPattern('workbench_active_projects');
+
+        Logger::debug('Cache', 'Invalidated project cache for post ' . $post_id);
+    }
+
+    /**
+     * Invalidate invoice related caches.
+     */
+    public static function invalidateInvoiceCache(int $post_id): void {
+        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+            return;
+        }
+
+        self::flushPattern('pending_invoices');
+        self::flushPattern('invoice_');
+        self::flushPattern('workbench_pending_invoices');
+
+        Logger::debug('Cache', 'Invalidated invoice cache for post ' . $post_id);
+    }
+
+    /**
+     * Invalidate milestone related caches.
+     */
+    public static function invalidateMilestoneCache(int $post_id): void {
+        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+            return;
+        }
+
+        // Milestones affect project data too
+        self::flushPattern('active_projects');
+        self::flushPattern('milestone_');
+        self::flushPattern('project_');
+        self::flushPattern('workbench_active_projects');
+
+        Logger::debug('Cache', 'Invalidated milestone cache for post ' . $post_id);
+    }
+
+    /**
+     * Invalidate time entry related caches.
+     */
+    public static function invalidateTimeEntryCache(int $post_id): void {
+        if (wp_is_post_autosave($post_id) || wp_is_post_revision($post_id)) {
+            return;
+        }
+
+        // Time entries affect SRs, projects, and milestones
+        self::flushPattern('open_srs');
+        self::flushPattern('active_projects');
+        self::flushPattern('te_');
+        self::flushPattern('sr_');
+        self::flushPattern('project_');
+        self::flushPattern('milestone_');
+        self::flushPattern('workbench_');
+        self::flushPattern('requests_summary');
+
+        Logger::debug('Cache', 'Invalidated time entry cache for post ' . $post_id);
+    }
+
+    /**
+     * Handle cache invalidation on post deletion.
+     *
+     * @param int           $post_id Post ID
+     * @param \WP_Post|null $post    Post object (may be null in some contexts)
+     */
+    public static function invalidateOnDelete(int $post_id, $post = null): void {
+        if (!$post) {
+            $post = get_post($post_id);
+        }
+
+        if (!$post) {
+            return;
+        }
+
+        switch ($post->post_type) {
+            case 'service_request':
+                self::invalidateServiceRequestCache($post_id);
+                break;
+            case 'project':
+                self::invalidateProjectCache($post_id);
+                break;
+            case 'invoice':
+                self::invalidateInvoiceCache($post_id);
+                break;
+            case 'milestone':
+                self::invalidateMilestoneCache($post_id);
+                break;
+            case 'time_entry':
+                self::invalidateTimeEntryCache($post_id);
+                break;
+        }
+    }
 }

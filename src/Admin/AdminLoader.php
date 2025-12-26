@@ -39,6 +39,10 @@ class AdminLoader {
         $this->health_dashboard = new ClientHealthDashboard();
         $this->health_dashboard->register();
 
+        // Initialize Time Entry Linker (pre-populates from SR/Project links)
+        $time_entry_linker = new TimeEntryLinker();
+        $time_entry_linker->register();
+
         // Register assets
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
 
