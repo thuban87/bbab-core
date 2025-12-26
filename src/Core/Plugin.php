@@ -4,7 +4,9 @@ declare(strict_types=1);
 namespace BBAB\ServiceCenter\Core;
 
 use BBAB\ServiceCenter\Admin\AdminLoader;
+use BBAB\ServiceCenter\Cron\CronLoader;
 use BBAB\ServiceCenter\Frontend\FrontendLoader;
+use BBAB\ServiceCenter\Utils\Cache;
 use BBAB\ServiceCenter\Utils\Logger;
 
 /**
@@ -42,6 +44,9 @@ class Plugin {
      * This is called on plugins_loaded with priority 10 (after SimulationBootstrap).
      */
     public function run(): void {
+        // Register cache invalidation hooks (runs for both admin and frontend)
+        Cache::registerInvalidationHooks();
+
         // Handle simulation start/exit requests on init
         add_action('init', [SimulationBootstrap::class, 'handleExitRequest']);
         add_action('init', [SimulationBootstrap::class, 'handleStartRequest']);
@@ -89,12 +94,8 @@ class Plugin {
      * Load cron handlers.
      */
     private function loadCron(): void {
-        // Cron loader will be created later
-        // For now, this is a placeholder
-
-        // TODO: Initialize CronLoader
-        // $cron_loader = new \BBAB\ServiceCenter\Cron\CronLoader();
-        // $cron_loader->register();
+        $cron_loader = new CronLoader();
+        $cron_loader->register();
     }
 
     /**

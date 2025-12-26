@@ -1,0 +1,209 @@
+<?php
+declare(strict_types=1);
+
+namespace BBAB\ServiceCenter\Cron;
+
+use BBAB\ServiceCenter\Modules\Analytics\GA4Service;
+use BBAB\ServiceCenter\Modules\Analytics\PageSpeedService;
+use BBAB\ServiceCenter\Utils\Logger;
+
+/**
+ * Registers and handles all cron jobs.
+ *
+ * Uses Action Scheduler for staggered processing to avoid timeouts.
+ * Each client org is processed 1 minute apart.
+ */
+class CronLoader {
+
+    /**
+     * Register cron hooks.
+     */
+    public function register(): void {
+        // Analytics dispatcher - runs at scheduled time, queues individual org jobs
+        add_action('bbab_sc_analytics_cron', [$this, 'dispatchAnalyticsJobs']);
+
+        // Analytics worker - processes ONE org at a time
+        add_action('bbab_sc_analytics_worker', [$this, 'processOrgAnalytics']);
+
+        // Hosting health cron (placeholder for Phase 3)
+        add_action('bbab_sc_hosting_cron', [$this, 'runHostingHealthChecks']);
+
+        // Cleanup cron
+        add_action('bbab_sc_cleanup_cron', [$this, 'runCleanup']);
+
+        Logger::debug('CronLoader', 'Cron hooks registered');
+    }
+
+    /**
+     * Dispatch analytics jobs - one per org, staggered 1 minute apart.
+     *
+     * Uses Action Scheduler if available, falls back to transient queue.
+     */
+    public function dispatchAnalyticsJobs(): void {
+        $orgs = get_posts([
+            'post_type' => 'client_organization',
+            'posts_per_page' => -1,
+            'post_status' => 'publish',
+        ]);
+
+        if (empty($orgs)) {
+            Logger::debug('CronLoader', 'Analytics dispatch: No organizations found');
+            return;
+        }
+
+        $scheduled_count = 0;
+
+        // Check if Action Scheduler is available (from WooCommerce or standalone)
+        if (function_exists('as_schedule_single_action')) {
+            // Use Action Scheduler - preferred method
+            foreach ($orgs as $index => $org) {
+                $delay = $index * 60; // 0, 60, 120, 180 seconds...
+
+                as_schedule_single_action(
+                    time() + $delay,
+                    'bbab_sc_analytics_worker',
+                    ['org_id' => $org->ID],
+                    'bbab-service-center'
+                );
+
+                $scheduled_count++;
+            }
+
+            Logger::debug('CronLoader', "Analytics dispatch: Scheduled $scheduled_count org jobs via Action Scheduler");
+        } else {
+            // Fallback: Process with delays in single execution
+            // Less ideal but works without Action Scheduler
+            Logger::debug('CronLoader', 'Analytics dispatch: Action Scheduler not available, processing inline');
+
+            foreach ($orgs as $index => $org) {
+                if ($index > 0) {
+                    sleep(30); // 30 second delay between orgs in fallback mode
+                }
+
+                $this->processOrgAnalytics($org->ID);
+                $scheduled_count++;
+
+                // Check if we're running out of time (50 second safety margin)
+                if ($index > 0 && (microtime(true) - $_SERVER['REQUEST_TIME_FLOAT']) > 50) {
+                    Logger::warning('CronLoader', "Analytics dispatch: Stopping early due to time limit after $scheduled_count orgs");
+                    break;
+                }
+            }
+
+            Logger::debug('CronLoader', "Analytics dispatch: Processed $scheduled_count orgs inline");
+        }
+    }
+
+    /**
+     * Process analytics for a single organization.
+     *
+     * Called by Action Scheduler (one org at a time) or inline fallback.
+     *
+     * @param int $org_id Organization post ID
+     */
+    public function processOrgAnalytics(int $org_id): void {
+        $org = get_post($org_id);
+
+        if (!$org) {
+            Logger::error('CronLoader', "Analytics worker: Org ID $org_id not found");
+            return;
+        }
+
+        $org_name = $org->post_title;
+        Logger::debug('CronLoader', "Analytics worker: Starting $org_name (ID: $org_id)");
+
+        $results = [
+            'org' => $org_name,
+            'ga4_core' => 'skip',
+            'ga4_pages' => 'skip',
+            'ga4_sources' => 'skip',
+            'ga4_devices' => 'skip',
+            'pagespeed' => 'skip',
+        ];
+
+        // Get field values
+        $ga4_property_id = get_post_meta($org_id, 'ga4_property_id', true);
+        $site_url = get_post_meta($org_id, 'site_url', true);
+
+        // ---- GA4 DATA ----
+        if (!empty($ga4_property_id)) {
+            try {
+                $result = GA4Service::fetchData($org_id);
+                $results['ga4_core'] = $result ? 'ok' : 'error';
+            } catch (\Exception $e) {
+                $results['ga4_core'] = 'error';
+                Logger::error('CronLoader', "GA4 core fetch failed for $org_name: " . $e->getMessage());
+            }
+
+            usleep(500000); // 0.5s delay
+
+            try {
+                $result = GA4Service::fetchTopPages($org_id, 5);
+                $results['ga4_pages'] = $result ? 'ok' : 'error';
+                usleep(300000);
+                GA4Service::fetchTopPages($org_id, 10); // Also fetch top 10
+            } catch (\Exception $e) {
+                $results['ga4_pages'] = 'error';
+                Logger::error('CronLoader', "GA4 pages fetch failed for $org_name: " . $e->getMessage());
+            }
+
+            usleep(500000);
+
+            try {
+                $result = GA4Service::fetchTrafficSources($org_id, 6);
+                $results['ga4_sources'] = $result ? 'ok' : 'error';
+            } catch (\Exception $e) {
+                $results['ga4_sources'] = 'error';
+                Logger::error('CronLoader', "GA4 sources fetch failed for $org_name: " . $e->getMessage());
+            }
+
+            usleep(500000);
+
+            try {
+                $result = GA4Service::fetchDevices($org_id);
+                $results['ga4_devices'] = $result ? 'ok' : 'error';
+            } catch (\Exception $e) {
+                $results['ga4_devices'] = 'error';
+                Logger::error('CronLoader', "GA4 devices fetch failed for $org_name: " . $e->getMessage());
+            }
+        }
+
+        // ---- PAGESPEED DATA ----
+        if (!empty($site_url)) {
+            usleep(500000);
+
+            try {
+                $start = microtime(true);
+                $result = PageSpeedService::fetchData($org_id);
+                $duration = round(microtime(true) - $start, 2);
+                $results['pagespeed'] = $result ? 'ok' : 'error';
+                Logger::debug('CronLoader', "PageSpeed for $org_name completed in {$duration}s");
+            } catch (\Exception $e) {
+                $results['pagespeed'] = 'error';
+                Logger::error('CronLoader', "PageSpeed fetch failed for $org_name: " . $e->getMessage());
+            }
+        }
+
+        Logger::debug('CronLoader', "Analytics worker: Completed $org_name - " . wp_json_encode($results));
+    }
+
+    /**
+     * Run hosting health checks (Phase 3 placeholder).
+     */
+    public function runHostingHealthChecks(): void {
+        Logger::debug('CronLoader', 'Hosting health cron: Not yet implemented');
+        // TODO: Implement in Phase 3
+    }
+
+    /**
+     * Run cleanup tasks.
+     */
+    public function runCleanup(): void {
+        Logger::debug('CronLoader', 'Cleanup cron: Starting');
+
+        // Clean up old transients, logs, etc.
+        // TODO: Implement cleanup logic
+
+        Logger::debug('CronLoader', 'Cleanup cron: Completed');
+    }
+}

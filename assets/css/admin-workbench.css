@@ -532,3 +532,267 @@
 .bbab-no-items {
     font-style: italic;
 }
+
+/* ==========================================================================
+   Summary Stats Bar (Sub-pages)
+   ========================================================================== */
+
+.bbab-stats-bar {
+    display: flex;
+    gap: 0;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.bbab-stat-box {
+    flex: 1;
+    padding: 15px 20px;
+    text-align: center;
+    border-right: 1px solid #f0f0f1;
+}
+
+.bbab-stat-box:last-child {
+    border-right: none;
+}
+
+.bbab-stat-box.bbab-stat-divider {
+    border-left: 2px solid #c3c4c7;
+    margin-left: -1px;
+}
+
+.bbab-stat-number {
+    display: block;
+    font-size: 24px;
+    font-weight: 600;
+    color: #1d2327;
+    line-height: 1.2;
+}
+
+.bbab-stat-label {
+    display: block;
+    font-size: 12px;
+    color: #787c82;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+}
+
+.bbab-stat-highlight {
+    background: #fff8e5;
+}
+
+.bbab-stat-highlight .bbab-stat-number {
+    color: #996800;
+}
+
+@media screen and (max-width: 782px) {
+    .bbab-stats-bar {
+        flex-wrap: wrap;
+    }
+
+    .bbab-stat-box {
+        flex: 1 1 33%;
+        min-width: 100px;
+    }
+
+    .bbab-stat-box.bbab-stat-divider {
+        flex: 1 1 50%;
+        border-left: none;
+        border-top: 2px solid #c3c4c7;
+    }
+}
+
+/* ==========================================================================
+   Filters Bar (Sub-pages)
+   ========================================================================== */
+
+.bbab-filters-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+}
+
+.bbab-filters-bar form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+}
+
+.bbab-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.bbab-filter-label {
+    font-weight: 500;
+    color: #1d2327;
+    white-space: nowrap;
+}
+
+.bbab-filter-search {
+    margin-left: auto;
+}
+
+.bbab-filter-search .search-box {
+    display: flex;
+    gap: 5px;
+}
+
+.bbab-filter-search input[type="search"] {
+    min-width: 200px;
+}
+
+/* Status Filter Pills */
+.bbab-status-pills {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.bbab-status-pill {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #f0f0f1;
+    color: #50575e;
+    text-decoration: none;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+}
+
+.bbab-status-pill:hover {
+    background: #dcdcde;
+    color: #1d2327;
+}
+
+.bbab-status-pill.active {
+    background: #2271b1;
+    color: #fff;
+}
+
+.bbab-status-pill.active:hover {
+    background: #135e96;
+}
+
+/* Client select dropdown */
+.bbab-client-select {
+    min-width: 200px;
+}
+
+@media screen and (max-width: 782px) {
+    .bbab-filters-bar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .bbab-filters-bar form {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .bbab-filter-search {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .bbab-filter-search input[type="search"] {
+        width: 100%;
+    }
+}
+
+/* ==========================================================================
+   List Table Enhancements (Sub-pages)
+   ========================================================================== */
+
+.bbab-list-table-wrap {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+
+.bbab-list-table-wrap .wp-list-table {
+    border: none;
+    margin: 0;
+}
+
+.bbab-list-table-wrap .tablenav {
+    padding: 10px 15px;
+    margin: 0;
+}
+
+.bbab-list-table-wrap .tablenav.top {
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.bbab-list-table-wrap .tablenav.bottom {
+    border-top: 1px solid #f0f0f1;
+}
+
+/* Count links in table */
+.bbab-count-link {
+    color: #2271b1;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.bbab-count-link:hover {
+    color: #135e96;
+    text-decoration: underline;
+}
+
+/* ==========================================================================
+   Quick Actions Bar (Sub-pages)
+   ========================================================================== */
+
+.bbab-quick-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.bbab-quick-actions .button .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    vertical-align: text-bottom;
+    margin-right: 4px;
+}
+
+/* ==========================================================================
+   Sub-page Header
+   ========================================================================== */
+
+.bbab-workbench-header {
+    margin-bottom: 20px;
+}
+
+.bbab-workbench-header h1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+
+.bbab-workbench-header h1 .dashicons {
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+    color: #2271b1;
+}
+
+.bbab-workbench-header p {
+    margin: 0;
+}

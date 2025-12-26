@@ -133,6 +133,49 @@ class WorkbenchPage {
             ];
             $query->set('meta_query', $meta_query);
         }
+
+        // Filter invoices by project (includes direct project invoices AND milestone invoices)
+        if ($post_type === 'invoice' && !empty($_GET['bbab_project_id'])) {
+            $project_id = absint($_GET['bbab_project_id']);
+
+            // Get all milestone IDs for this project
+            $milestone_ids = get_posts([
+                'post_type' => 'milestone',
+                'post_status' => 'publish',
+                'posts_per_page' => -1,
+                'fields' => 'ids',
+                'meta_query' => [
+                    [
+                        'key' => 'related_project',
+                        'value' => $project_id,
+                        'compare' => '=',
+                    ],
+                ],
+            ]);
+
+            $meta_query = $query->get('meta_query') ?: [];
+
+            // Build OR query: related_project = X OR related_milestone IN (milestone_ids)
+            $project_filter = [
+                'relation' => 'OR',
+                [
+                    'key' => 'related_project',
+                    'value' => $project_id,
+                    'compare' => '=',
+                ],
+            ];
+
+            if (!empty($milestone_ids)) {
+                $project_filter[] = [
+                    'key' => 'related_milestone',
+                    'value' => $milestone_ids,
+                    'compare' => 'IN',
+                ];
+            }
+
+            $meta_query[] = $project_filter;
+            $query->set('meta_query', $meta_query);
+        }
     }
 
     /**
@@ -275,34 +318,43 @@ class WorkbenchPage {
     }
 
     /**
-     * Placeholder for sub-pages - redirect to original for now
+     * Render the Projects sub-page.
      */
     public function renderProjectsPage(): void {
-        $this->renderSubpagePlaceholder('Projects');
+        $subpage = new ProjectsSubpage();
+        $subpage->render();
     }
 
+    /**
+     * Render the Service Requests sub-page.
+     */
     public function renderRequestsPage(): void {
-        $this->renderSubpagePlaceholder('Service Requests');
+        $subpage = new RequestsSubpage();
+        $subpage->render();
     }
 
+    /**
+     * Render the Invoices sub-page.
+     */
     public function renderInvoicesPage(): void {
-        $this->renderSubpagePlaceholder('Invoices');
+        $subpage = new InvoicesSubpage();
+        $subpage->render();
     }
 
+    /**
+     * Render the Client Tasks sub-page.
+     */
     public function renderTasksPage(): void {
-        $this->renderSubpagePlaceholder('Client Tasks');
+        $subpage = new TasksSubpage();
+        $subpage->render();
     }
 
+    /**
+     * Render the Roadmap Items sub-page.
+     */
     public function renderRoadmapPage(): void {
-        $this->renderSubpagePlaceholder('Roadmap Items');
-    }
-
-    private function renderSubpagePlaceholder(string $name): void {
-        echo '<div class="wrap">';
-        echo '<h1>' . esc_html($name) . '</h1>';
-        echo '<p>This sub-page will be fully ported in a future phase. ';
-        echo 'For now, use the main <a href="' . esc_url(admin_url('admin.php?page=bbab-workbench')) . '">Workbench Dashboard</a>.</p>';
-        echo '</div>';
+        $subpage = new RoadmapSubpage();
+        $subpage->render();
     }
 
     /**
