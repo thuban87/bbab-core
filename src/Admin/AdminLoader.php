@@ -8,6 +8,7 @@ use BBAB\ServiceCenter\Admin\Pages\ClientHealthDashboard;
 use BBAB\ServiceCenter\Admin\Pages\SettingsPage;
 use BBAB\ServiceCenter\Admin\Columns\ServiceRequestColumns;
 use BBAB\ServiceCenter\Admin\Columns\TimeEntryColumns;
+use BBAB\ServiceCenter\Admin\Columns\ProjectMilestoneRefColumns;
 use BBAB\ServiceCenter\Admin\RowActions\LogTimeAction;
 use BBAB\ServiceCenter\Admin\Metaboxes\ServiceRequestMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\TimerMetabox;
@@ -18,6 +19,9 @@ use BBAB\ServiceCenter\Modules\TimeTracking\TimerService;
 use BBAB\ServiceCenter\Modules\TimeTracking\TEReferenceGenerator;
 use BBAB\ServiceCenter\Modules\ServiceRequests\ReferenceGenerator;
 use BBAB\ServiceCenter\Modules\ServiceRequests\FormProcessor;
+use BBAB\ServiceCenter\Modules\Projects\ProjectReferenceGenerator;
+use BBAB\ServiceCenter\Modules\Projects\MilestoneReferenceGenerator;
+use BBAB\ServiceCenter\Modules\Projects\TitleSync;
 use BBAB\ServiceCenter\Utils\Logger;
 
 /**
@@ -78,9 +82,17 @@ class AdminLoader {
         ReferenceGenerator::register();
         FormProcessor::register();
 
+        // Initialize Project/Milestone services (Phase 5.1)
+        ProjectReferenceGenerator::register();
+        MilestoneReferenceGenerator::register();
+        TitleSync::register();
+
         // Initialize admin columns and filters (Phase 4.3)
         ServiceRequestColumns::register();
         TimeEntryColumns::register();
+
+        // Initialize Project/Milestone reference columns + metaboxes (Phase 5.1)
+        ProjectMilestoneRefColumns::register();
 
         // Initialize row actions (Phase 4.3)
         LogTimeAction::register();
