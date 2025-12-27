@@ -77,6 +77,35 @@ if (!function_exists('bbab_generate_sr_reference')) {
     }
 }
 
+if (!function_exists('bbab_generate_invoice_number')) {
+    /**
+     * Generate next invoice number in BBB-YYMM-NNN format.
+     *
+     * Compatibility wrapper - snippet 1995 deactivated in Phase 5.3.
+     *
+     * @param string|null $invoice_date Date string (any format parseable by strtotime).
+     * @return string Next invoice number.
+     */
+    function bbab_generate_invoice_number(?string $invoice_date = null): string {
+        return \BBAB\ServiceCenter\Modules\Billing\InvoiceReferenceGenerator::generateNumber($invoice_date);
+    }
+}
+
+if (!function_exists('bbab_create_invoice_line_item')) {
+    /**
+     * Create a single invoice line item.
+     *
+     * Compatibility wrapper - snippet 1996 partially deactivated in Phase 5.3.
+     *
+     * @param int   $invoice_id Invoice post ID.
+     * @param array $data       Line item data.
+     * @return int|WP_Error Line item post ID or error.
+     */
+    function bbab_create_invoice_line_item(int $invoice_id, array $data): int|\WP_Error {
+        return \BBAB\ServiceCenter\Modules\Billing\LineItemService::create($invoice_id, $data);
+    }
+}
+
 // CRITICAL: Bootstrap simulation EARLY (before any other plugin code)
 // This runs on plugins_loaded priority 1, before anything else queries data
 add_action('plugins_loaded', function() {

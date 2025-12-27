@@ -11,13 +11,16 @@ use BBAB\ServiceCenter\Admin\Columns\TimeEntryColumns;
 use BBAB\ServiceCenter\Admin\Columns\ProjectMilestoneRefColumns;
 use BBAB\ServiceCenter\Admin\Columns\ProjectColumns;
 use BBAB\ServiceCenter\Admin\Columns\MilestoneColumns;
+use BBAB\ServiceCenter\Admin\Columns\InvoiceColumns;
 use BBAB\ServiceCenter\Admin\RowActions\LogTimeAction;
 use BBAB\ServiceCenter\Admin\Metaboxes\ServiceRequestMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\TimerMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\TimeEntryReassignMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\ProjectMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\MilestoneMetabox;
+use BBAB\ServiceCenter\Admin\Metaboxes\InvoiceMetabox;
 use BBAB\ServiceCenter\Admin\GlobalTimerIndicator;
+use BBAB\ServiceCenter\Admin\LineItemLinker;
 use BBAB\ServiceCenter\Modules\TimeTracking\TimeEntryService;
 use BBAB\ServiceCenter\Modules\TimeTracking\TimerService;
 use BBAB\ServiceCenter\Modules\TimeTracking\TEReferenceGenerator;
@@ -26,6 +29,9 @@ use BBAB\ServiceCenter\Modules\ServiceRequests\FormProcessor;
 use BBAB\ServiceCenter\Modules\Projects\ProjectReferenceGenerator;
 use BBAB\ServiceCenter\Modules\Projects\MilestoneReferenceGenerator;
 use BBAB\ServiceCenter\Modules\Projects\TitleSync;
+use BBAB\ServiceCenter\Modules\Billing\InvoiceReferenceGenerator;
+use BBAB\ServiceCenter\Modules\Billing\InvoiceTitleSync;
+use BBAB\ServiceCenter\Modules\Billing\LineItemService;
 use BBAB\ServiceCenter\Utils\Logger;
 
 /**
@@ -73,6 +79,10 @@ class AdminLoader {
         $time_entry_linker = new TimeEntryLinker();
         $time_entry_linker->register();
 
+        // Initialize Line Item Linker (pre-populates from invoice links)
+        $line_item_linker = new LineItemLinker();
+        $line_item_linker->register();
+
         // Initialize Time Entry Service (hours calculation, orphan prevention, transient linking)
         TimeEntryService::register();
 
@@ -91,6 +101,11 @@ class AdminLoader {
         MilestoneReferenceGenerator::register();
         TitleSync::register();
 
+        // Initialize Invoice/Billing services (Phase 5.3)
+        InvoiceReferenceGenerator::register();
+        InvoiceTitleSync::register();
+        LineItemService::register();
+
         // Initialize admin columns and filters (Phase 4.3)
         ServiceRequestColumns::register();
         TimeEntryColumns::register();
@@ -98,6 +113,9 @@ class AdminLoader {
         // Initialize Project/Milestone columns (Phase 5.2)
         ProjectColumns::register();
         MilestoneColumns::register();
+
+        // Initialize Invoice columns (Phase 5.3)
+        InvoiceColumns::register();
 
         // Initialize Project/Milestone reference metaboxes (Phase 5.1)
         ProjectMilestoneRefColumns::register();
@@ -113,6 +131,9 @@ class AdminLoader {
         // Initialize Project/Milestone metaboxes (Phase 5.2)
         ProjectMetabox::register();
         MilestoneMetabox::register();
+
+        // Initialize Invoice metaboxes (Phase 5.3)
+        InvoiceMetabox::register();
 
         // Initialize global timer indicator (Phase 4.3)
         GlobalTimerIndicator::register();
