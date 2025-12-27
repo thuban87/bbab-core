@@ -56,6 +56,9 @@ class Settings {
         'simulation_cookie_name' => 'bbab_sc_sim_org',
         'simulation_cookie_expiry' => 3600, // 1 hour
 
+        // Time Tracking Settings
+        'forgotten_timer_email' => 'brad@bradsbitsandbytes.com',
+
         // Service Request Email Notification
         // Placeholders: {ref}, {org_name}, {user_name}, {user_email}, {type}, {subject}, {description}, {admin_link}
         'sr_notification_email' => 'brad@bradsbitsandbytes.com',

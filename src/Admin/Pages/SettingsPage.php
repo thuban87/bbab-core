@@ -6,6 +6,7 @@ namespace BBAB\ServiceCenter\Admin\Pages;
 use BBAB\ServiceCenter\Utils\Settings;
 use BBAB\ServiceCenter\Utils\Logger;
 use BBAB\ServiceCenter\Modules\TimeTracking\TEReferenceGenerator;
+use BBAB\ServiceCenter\Cron\ForgottenTimerHandler;
 
 /**
  * Plugin Settings Page.
@@ -33,6 +34,9 @@ class SettingsPage {
     public function register(): void {
         add_action('admin_menu', [$this, 'registerMenu'], 99);
         add_action('admin_init', [$this, 'registerSettings']);
+
+        // AJAX handlers for maintenance tools
+        add_action('wp_ajax_bbab_sc_check_forgotten_timers', [$this, 'handleForgottenTimerCheck']);
     }
 
     /**
@@ -89,6 +93,11 @@ class SettingsPage {
         if (isset($input['sr_notification_body'])) {
             // Allow HTML in email body but sanitize it
             $existing['sr_notification_body'] = wp_kses_post($input['sr_notification_body']);
+        }
+
+        // Sanitize Time Tracking settings
+        if (isset($input['forgotten_timer_email'])) {
+            $existing['forgotten_timer_email'] = sanitize_email($input['forgotten_timer_email']);
         }
 
         Logger::debug('SettingsPage', 'Settings saved');
@@ -244,29 +253,27 @@ class SettingsPage {
                         </td>
                     </tr>
 
-                    <!-- Time Tracking Section (Placeholder) -->
+                    <!-- Time Tracking Section -->
                     <tr>
                         <th colspan="2" style="padding-bottom: 0;">
                             <h2 style="margin: 20px 0 0 0; padding: 10px 0; border-bottom: 1px solid #ccc;">
                                 Time Tracking
-                                <span style="font-size: 12px; font-weight: normal; color: #666; margin-left: 10px;">
-                                    (Available after Phase 4.6 migration)
-                                </span>
                             </h2>
                         </th>
                     </tr>
 
                     <tr>
                         <th scope="row">
-                            <label><?php esc_html_e('Forgotten Timer Email', 'bbab-service-center'); ?></label>
+                            <label for="forgotten_timer_email"><?php esc_html_e('Forgotten Timer Email', 'bbab-service-center'); ?></label>
                         </th>
                         <td>
                             <input type="email"
-                                   value="<?php echo esc_attr(get_option('admin_email')); ?>"
-                                   class="regular-text"
-                                   disabled>
-                            <p class="description" style="color: #999;">
-                                <?php esc_html_e('This setting is currently managed by snippet #2359. It will be migrated when the Forgotten Timer cron is built in Phase 4.6.', 'bbab-service-center'); ?>
+                                   id="forgotten_timer_email"
+                                   name="<?php echo esc_attr(self::OPTION_NAME); ?>[forgotten_timer_email]"
+                                   value="<?php echo esc_attr($settings['forgotten_timer_email'] ?? ''); ?>"
+                                   class="regular-text">
+                            <p class="description">
+                                <?php esc_html_e('Email address to receive alerts when a timer has been running 4+ hours.', 'bbab-service-center'); ?>
                             </p>
                         </td>
                     </tr>
@@ -345,6 +352,28 @@ class SettingsPage {
                     </td>
                 </tr>
                 <?php endif; ?>
+
+                <tr>
+                    <th scope="row">
+                        <?php esc_html_e('Forgotten Timer Check', 'bbab-service-center'); ?>
+                    </th>
+                    <td>
+                        <p style="margin-bottom: 10px;">
+                            <?php esc_html_e('Manually run the forgotten timer check (normally runs every 30 minutes).', 'bbab-service-center'); ?>
+                        </p>
+
+                        <button type="button"
+                                id="bbab-check-forgotten-timers"
+                                class="button button-secondary">
+                            <?php esc_html_e('Check for Forgotten Timers', 'bbab-service-center'); ?>
+                        </button>
+                        <span id="bbab-forgotten-timer-status" style="margin-left: 10px;"></span>
+
+                        <p class="description" style="margin-top: 8px;">
+                            <?php esc_html_e('Checks for timers running 4+ hours and sends an alert email if any are found.', 'bbab-service-center'); ?>
+                        </p>
+                    </td>
+                </tr>
             </table>
 
             <script>
@@ -426,6 +455,37 @@ class SettingsPage {
                         }
                     });
                 });
+
+                // Check for forgotten timers
+                $('#bbab-check-forgotten-timers').on('click', function() {
+                    var $btn = $(this);
+                    var $status = $('#bbab-forgotten-timer-status');
+
+                    $btn.prop('disabled', true);
+                    $status.html('<span style="color: #666;">Checking...</span>');
+
+                    $.ajax({
+                        url: ajaxurl,
+                        type: 'POST',
+                        data: {
+                            action: 'bbab_sc_check_forgotten_timers',
+                            nonce: '<?php echo wp_create_nonce('bbab_sc_check_forgotten_timers'); ?>'
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                var color = response.data.count > 0 ? '#b32d2e' : '#1e8449';
+                                $status.html('<span style="color: ' + color + '; font-weight: 500;">' + response.data.message + '</span>');
+                            } else {
+                                $status.html('<span style="color: #b32d2e;">Error: ' + response.data + '</span>');
+                            }
+                            $btn.prop('disabled', false);
+                        },
+                        error: function() {
+                            $status.html('<span style="color: #b32d2e;">Request failed. Check console for details.</span>');
+                            $btn.prop('disabled', false);
+                        }
+                    });
+                });
             });
             </script>
 
@@ -451,6 +511,10 @@ class SettingsPage {
                         <td><?php echo esc_html($settings['sr_notification_email'] ?: '(not set)'); ?></td>
                     </tr>
                     <tr>
+                        <td><code>forgotten_timer_email</code></td>
+                        <td><?php echo esc_html($settings['forgotten_timer_email'] ?: '(not set)'); ?></td>
+                    </tr>
+                    <tr>
                         <td><code>debug_mode</code></td>
                         <td><?php echo $settings['debug_mode'] ? 'true' : 'false'; ?></td>
                     </tr>
@@ -462,5 +526,24 @@ class SettingsPage {
             </table>
         </div>
         <?php
+    }
+
+    /**
+     * Handle AJAX request to manually check for forgotten timers.
+     */
+    public function handleForgottenTimerCheck(): void {
+        if (!check_ajax_referer('bbab_sc_check_forgotten_timers', 'nonce', false)) {
+            wp_send_json_error('Security check failed');
+            return;
+        }
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Permission denied');
+            return;
+        }
+
+        $result = ForgottenTimerHandler::manualCheck();
+
+        wp_send_json_success($result);
     }
 }
