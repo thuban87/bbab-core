@@ -316,10 +316,10 @@ class TimeEntryService {
         $milestone = get_post_meta($post_id, 'related_milestone', true);
 
         if (empty($sr) && empty($project) && empty($milestone)) {
-            // Delete the orphan post
-            wp_delete_post($post_id, true);
+            // Trash the orphan post (use trash instead of hard delete for recovery buffer)
+            wp_trash_post($post_id);
 
-            Logger::warning('TimeEntryService', "Deleted orphan time entry {$post_id}");
+            Logger::warning('TimeEntryService', "Trashed orphan time entry {$post_id}");
 
             wp_die(
                 '<h1>Time Entry Not Saved</h1>' .
