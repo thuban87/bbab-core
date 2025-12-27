@@ -106,6 +106,48 @@ if (!function_exists('bbab_create_invoice_line_item')) {
     }
 }
 
+if (!function_exists('bbab_generate_invoice_from_milestone')) {
+    /**
+     * Generate invoice from milestone.
+     *
+     * Compatibility wrapper - snippet 2398 deactivated in Phase 5.4.
+     *
+     * @param int $milestone_id Milestone post ID.
+     * @return int|WP_Error Invoice ID or error.
+     */
+    function bbab_generate_invoice_from_milestone(int $milestone_id): int|\WP_Error {
+        return \BBAB\ServiceCenter\Modules\Billing\InvoiceGenerator::fromMilestone($milestone_id);
+    }
+}
+
+if (!function_exists('bbab_generate_closeout_invoice')) {
+    /**
+     * Generate closeout invoice from project.
+     *
+     * Compatibility wrapper - snippet 2463 deactivated in Phase 5.4.
+     *
+     * @param int $project_id Project post ID.
+     * @return int|WP_Error Invoice ID or error.
+     */
+    function bbab_generate_closeout_invoice(int $project_id): int|\WP_Error {
+        return \BBAB\ServiceCenter\Modules\Billing\InvoiceGenerator::closeoutFromProject($project_id);
+    }
+}
+
+if (!function_exists('bbab_get_milestone_total_hours')) {
+    /**
+     * Get milestone total billable hours.
+     *
+     * Compatibility wrapper - snippet 2052 deactivated in Phase 5.4.
+     *
+     * @param int $milestone_id Milestone post ID.
+     * @return float Total billable hours.
+     */
+    function bbab_get_milestone_total_hours(int $milestone_id): float {
+        return \BBAB\ServiceCenter\Modules\Billing\InvoiceGenerator::getMilestoneTotalHours($milestone_id);
+    }
+}
+
 // CRITICAL: Bootstrap simulation EARLY (before any other plugin code)
 // This runs on plugins_loaded priority 1, before anything else queries data
 add_action('plugins_loaded', function() {

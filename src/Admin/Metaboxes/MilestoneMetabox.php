@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace BBAB\ServiceCenter\Admin\Metaboxes;
 
 use BBAB\ServiceCenter\Modules\Projects\MilestoneService;
+use BBAB\ServiceCenter\Modules\Billing\InvoiceService;
 use BBAB\ServiceCenter\Utils\Logger;
 
 /**
@@ -26,6 +27,7 @@ class MilestoneMetabox {
     public static function register(): void {
         add_action('add_meta_boxes', [self::class, 'registerMetaboxes']);
         add_action('admin_head', [self::class, 'renderStyles']);
+        add_filter('post_row_actions', [self::class, 'addRowActions'], 10, 2);
 
         // Note: TE pre-population (project_link, milestone_link params) is handled by TimeEntryLinker
 
@@ -36,6 +38,16 @@ class MilestoneMetabox {
      * Register the metaboxes.
      */
     public static function registerMetaboxes(): void {
+        // Invoice Generation (sidebar, high priority)
+        add_meta_box(
+            'bbab_milestone_generate_invoice',
+            'Invoice Generation',
+            [self::class, 'renderInvoiceGenerationMetabox'],
+            'milestone',
+            'side',
+            'high'
+        );
+
         // Time Entries (sidebar)
         add_meta_box(
             'bbab_milestone_time_entries',
@@ -268,6 +280,193 @@ class MilestoneMetabox {
             return "\xF0\x9F\x93\xA6";
         }
         return "\xF0\x9F\x93\x8E";
+    }
+
+    /**
+     * Render invoice generation metabox.
+     *
+     * @param \WP_Post $post The post object.
+     */
+    public static function renderInvoiceGenerationMetabox(\WP_Post $post): void {
+        $billing_status = get_post_meta($post->ID, 'billing_status', true) ?: 'Pending';
+        $amount = (float) get_post_meta($post->ID, 'milestone_amount', true);
+        $is_deposit = get_post_meta($post->ID, 'is_deposit', true);
+        $related_project = get_post_meta($post->ID, 'related_project', true);
+
+        // Get existing invoice if any
+        $existing_invoices = InvoiceService::getForMilestone($post->ID);
+
+        // Determine if hourly and calculate
+        $is_hourly = ($amount <= 0);
+        $hourly_amount = 0.0;
+        $billable_hours = 0.0;
+        $te_count = 0;
+
+        if ($is_hourly && !empty($related_project)) {
+            $org_id = get_post_meta($related_project, 'organization', true);
+            $hourly_rate = (float) (get_post_meta($org_id, 'hourly_rate', true) ?: 30);
+
+            $time_entries = get_posts([
+                'post_type' => 'time_entry',
+                'posts_per_page' => -1,
+                'post_status' => 'publish',
+                'meta_query' => [[
+                    'key' => 'related_milestone',
+                    'value' => $post->ID,
+                    'compare' => '=',
+                ]],
+            ]);
+
+            $te_count = count($time_entries);
+
+            foreach ($time_entries as $te) {
+                $hours = (float) get_post_meta($te->ID, 'hours', true);
+                $billable = get_post_meta($te->ID, 'billable', true);
+
+                if ($billable !== '0' && $billable !== 0 && $billable !== false) {
+                    $billable_hours += $hours;
+                }
+            }
+
+            $hourly_amount = $billable_hours * $hourly_rate;
+        }
+
+        echo '<div style="padding: 10px 0;">';
+
+        // Status badge
+        $status_colors = [
+            'Pending' => '#d97706',
+            'Invoiced' => '#2563eb',
+            'Invoiced as Deposit' => '#7c3aed',
+            'Paid' => '#059669',
+        ];
+        $color = $status_colors[$billing_status] ?? '#6b7280';
+        echo '<p><strong>Billing Status:</strong> <span style="color: ' . $color . '; font-weight: 600;">' . esc_html($billing_status) . '</span></p>';
+
+        // Amount display
+        if ($is_hourly) {
+            echo '<p><strong>Billing:</strong> <span style="color: #2563eb;">Hourly</span></p>';
+            echo '<p><strong>Time Entries:</strong> ' . $te_count . ' entries (' . number_format($billable_hours, 2) . ' billable hrs)</p>';
+            echo '<p><strong>Calculated Amount:</strong> $' . number_format($hourly_amount, 2) . '</p>';
+        } else {
+            echo '<p><strong>Billing:</strong> Flat Rate</p>';
+            echo '<p><strong>Amount:</strong> $' . number_format($amount, 2) . '</p>';
+        }
+
+        // Deposit indicator
+        if ($is_deposit === '1' || $is_deposit === 1) {
+            echo '<p><span style="background: #7c3aed; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">DEPOSIT</span></p>';
+        }
+
+        echo '<hr style="margin: 15px 0; border: none; border-top: 1px solid #e5e7eb;">';
+
+        // If already invoiced, show link to invoice
+        if (!empty($existing_invoices)) {
+            $invoice_id = $existing_invoices[0]->ID;
+            $invoice_number = get_post_meta($invoice_id, 'invoice_number', true);
+            $edit_link = get_edit_post_link($invoice_id);
+
+            echo '<p style="margin-bottom: 10px;">Invoice: <a href="' . esc_url($edit_link) . '"><strong>' . esc_html($invoice_number) . '</strong></a></p>';
+            echo '<p style="color: #6b7280; font-size: 12px;">This milestone has already been invoiced.</p>';
+        }
+        // Show generate button if eligible
+        elseif (!empty($related_project) && ($amount > 0 || $hourly_amount > 0)) {
+            $url = wp_nonce_url(
+                admin_url('admin-post.php?action=bbab_generate_milestone_invoice&milestone_id=' . $post->ID),
+                'bbab_generate_milestone_invoice_' . $post->ID
+            );
+
+            echo '<a href="' . esc_url($url) . '" class="button button-primary" style="width: 100%; text-align: center;">Generate Invoice</a>';
+
+            if ($is_deposit === '1' || $is_deposit === 1) {
+                echo '<p style="color: #6b7280; font-size: 11px; margin-top: 8px;">Will be invoiced as <strong>Deposit</strong></p>';
+            }
+        }
+        // Show why we can't generate
+        else {
+            echo '<p style="color: #dc2626; font-size: 12px;">';
+            if (empty($related_project)) {
+                echo 'Cannot generate invoice: No project linked.';
+            } elseif ($amount <= 0 && $hourly_amount <= 0) {
+                echo 'Cannot generate invoice: No amount set and no billable time entries.';
+            }
+            echo '</p>';
+        }
+
+        echo '</div>';
+    }
+
+    /**
+     * Add row actions to milestone list.
+     *
+     * @param array    $actions Existing actions.
+     * @param \WP_Post $post    The post object.
+     * @return array Modified actions.
+     */
+    public static function addRowActions(array $actions, \WP_Post $post): array {
+        if ($post->post_type !== 'milestone') {
+            return $actions;
+        }
+
+        // Check if milestone already has an invoice
+        $billing_status = get_post_meta($post->ID, 'billing_status', true);
+        if (in_array($billing_status, ['Invoiced', 'Invoiced as Deposit', 'Paid'], true)) {
+            return $actions;
+        }
+
+        // Check if milestone has an amount (flat rate)
+        $amount = (float) get_post_meta($post->ID, 'milestone_amount', true);
+
+        // Check if milestone has billable TEs (hourly)
+        $has_billable_tes = false;
+        if ($amount <= 0) {
+            $time_entries = get_posts([
+                'post_type' => 'time_entry',
+                'posts_per_page' => 1,
+                'post_status' => 'publish',
+                'meta_query' => [
+                    [
+                        'key' => 'related_milestone',
+                        'value' => $post->ID,
+                        'compare' => '=',
+                    ],
+                    [
+                        'relation' => 'OR',
+                        [
+                            'key' => 'billable',
+                            'compare' => 'NOT EXISTS',
+                        ],
+                        [
+                            'key' => 'billable',
+                            'value' => '0',
+                            'compare' => '!=',
+                        ],
+                    ],
+                ],
+            ]);
+            $has_billable_tes = !empty($time_entries);
+        }
+
+        // Must have either flat amount or billable TEs
+        if ($amount <= 0 && !$has_billable_tes) {
+            return $actions;
+        }
+
+        // Must have a project linked
+        $related_project = get_post_meta($post->ID, 'related_project', true);
+        if (empty($related_project)) {
+            return $actions;
+        }
+
+        $url = wp_nonce_url(
+            admin_url('admin-post.php?action=bbab_generate_milestone_invoice&milestone_id=' . $post->ID),
+            'bbab_generate_milestone_invoice_' . $post->ID
+        );
+
+        $label = ($amount > 0) ? 'Generate Invoice' : 'Generate Invoice (Hourly)';
+        $actions['generate_invoice'] = '<a href="' . esc_url($url) . '" style="color: #2563eb; font-weight: 500;">' . $label . '</a>';
+
+        return $actions;
     }
 
     /**

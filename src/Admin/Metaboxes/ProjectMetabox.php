@@ -5,6 +5,7 @@ namespace BBAB\ServiceCenter\Admin\Metaboxes;
 
 use BBAB\ServiceCenter\Modules\Projects\ProjectService;
 use BBAB\ServiceCenter\Modules\Projects\MilestoneService;
+use BBAB\ServiceCenter\Modules\Billing\InvoiceService;
 use BBAB\ServiceCenter\Utils\Logger;
 
 /**
@@ -29,6 +30,7 @@ class ProjectMetabox {
     public static function register(): void {
         add_action('add_meta_boxes', [self::class, 'registerMetaboxes']);
         add_action('admin_head', [self::class, 'renderStyles']);
+        add_filter('post_row_actions', [self::class, 'addRowActions'], 10, 2);
 
         // Handle project_link parameter for new milestones
         add_action('load-post-new.php', [self::class, 'handleProjectLinkParam']);
@@ -44,6 +46,16 @@ class ProjectMetabox {
      * Register the metaboxes.
      */
     public static function registerMetaboxes(): void {
+        // Closeout Invoice (sidebar, high priority)
+        add_meta_box(
+            'bbab_project_closeout_invoice',
+            'Project Closeout',
+            [self::class, 'renderCloseoutInvoiceMetabox'],
+            'project',
+            'side',
+            'high'
+        );
+
         // Milestones table (main content area)
         add_meta_box(
             'bbab_project_milestones',
@@ -629,6 +641,191 @@ class ProjectMetabox {
         $next_order = ($max_order ? intval($max_order) : 0) + 1;
 
         wp_send_json_success(['next_order' => $next_order]);
+    }
+
+    /**
+     * Render closeout invoice metabox.
+     *
+     * @param \WP_Post $post The post object.
+     */
+    public static function renderCloseoutInvoiceMetabox(\WP_Post $post): void {
+        $billing_status = get_post_meta($post->ID, 'billing_status', true) ?: 'Not Started';
+        $org_id = get_post_meta($post->ID, 'organization', true);
+        $project_ref = get_post_meta($post->ID, 'reference_number', true) ?: 'PR-????';
+
+        // Get all milestones for this project
+        $milestones = ProjectService::getMilestones($post->ID);
+
+        // Analyze milestone statuses
+        $warnings = [];
+        $milestone_summary = [];
+
+        foreach ($milestones as $milestone) {
+            $ms_name = get_post_meta($milestone->ID, 'milestone_name', true) ?: get_the_title($milestone->ID);
+            $ms_ref = get_post_meta($milestone->ID, 'reference_number', true) ?: '';
+            $ms_billing_status = get_post_meta($milestone->ID, 'billing_status', true) ?: 'Pending';
+
+            // Check for existing invoice
+            $existing_invoices = InvoiceService::getForMilestone($milestone->ID);
+
+            $invoice_status = '';
+            if (!empty($existing_invoices)) {
+                $invoice_status = InvoiceService::getStatus($existing_invoices[0]->ID);
+            }
+
+            // Determine display status and warnings
+            $display_status = $ms_billing_status;
+            $status_color = '#6b7280';
+
+            if ($invoice_status === 'Draft') {
+                $display_status = 'Draft Invoice';
+                $status_color = '#d97706';
+                $warnings[] = '<strong>' . esc_html($ms_ref ?: $ms_name) . '</strong> has a Draft invoice (TEs not approved)';
+            } elseif ($invoice_status === 'Paid') {
+                $display_status = 'Paid';
+                $status_color = '#059669';
+            } elseif ($invoice_status === 'Partial') {
+                $display_status = 'Partial';
+                $status_color = '#2563eb';
+            } elseif (in_array($invoice_status, ['Pending', 'Overdue'], true)) {
+                $display_status = $invoice_status . ' (will void)';
+                $status_color = '#dc2626';
+            } elseif ($ms_billing_status === 'Pending' || empty($ms_billing_status)) {
+                $display_status = 'Not Invoiced';
+                $status_color = '#d97706';
+                $warnings[] = '<strong>' . esc_html($ms_ref ?: $ms_name) . '</strong> has not been invoiced yet';
+            }
+
+            $milestone_summary[] = [
+                'name' => $ms_ref ?: $ms_name,
+                'status' => $display_status,
+                'color' => $status_color,
+            ];
+        }
+
+        // Check for project-level TEs
+        $project_tes = get_posts([
+            'post_type' => 'time_entry',
+            'posts_per_page' => -1,
+            'post_status' => 'publish',
+            'meta_query' => [[
+                'key' => 'related_project',
+                'value' => $post->ID,
+                'compare' => '=',
+            ]],
+        ]);
+
+        // Get existing closeout invoice if any
+        $existing_closeout = InvoiceService::getCloseoutForProject($post->ID);
+
+        echo '<div style="padding: 10px 0;">';
+
+        // Billing status badge
+        $status_colors = [
+            'Not Started' => '#6b7280',
+            'In Progress' => '#2563eb',
+            'Invoiced' => '#059669',
+        ];
+        $color = $status_colors[$billing_status] ?? '#6b7280';
+        echo '<p><strong>Billing Status:</strong> <span style="color: ' . $color . '; font-weight: 600;">' . esc_html($billing_status) . '</span></p>';
+
+        // Project TEs count
+        echo '<p><strong>Project-level TEs:</strong> ' . count($project_tes) . '</p>';
+
+        echo '<hr style="margin: 12px 0; border: none; border-top: 1px solid #e5e7eb;">';
+
+        // Milestone summary
+        if (!empty($milestone_summary)) {
+            echo '<p style="margin-bottom: 8px;"><strong>Milestones:</strong></p>';
+            echo '<div style="font-size: 12px; max-height: 150px; overflow-y: auto;">';
+            foreach ($milestone_summary as $ms) {
+                echo '<div style="padding: 4px 0; border-bottom: 1px solid #f3f4f6;">';
+                echo '<span style="color: ' . $ms['color'] . ';">&#9679;</span> ';
+                echo esc_html($ms['name']) . ' - <span style="color: ' . $ms['color'] . ';">' . esc_html($ms['status']) . '</span>';
+                echo '</div>';
+            }
+            echo '</div>';
+        } else {
+            echo '<p style="color: #6b7280; font-size: 12px;">No milestones found.</p>';
+        }
+
+        echo '<hr style="margin: 12px 0; border: none; border-top: 1px solid #e5e7eb;">';
+
+        // Warnings
+        if (!empty($warnings)) {
+            echo '<div style="background: #fef3c7; border-left: 3px solid #f59e0b; padding: 8px; margin-bottom: 12px; font-size: 11px;">';
+            echo '<strong style="color: #92400e;">Warnings:</strong><br>';
+            echo implode('<br>', $warnings);
+            echo '<br><br><em>These milestones will be excluded from line items but shown on details page.</em>';
+            echo '</div>';
+        }
+
+        // If already closed out, show link to invoice
+        if ($existing_closeout) {
+            $invoice_number = get_post_meta($existing_closeout->ID, 'invoice_number', true);
+            $edit_link = get_edit_post_link($existing_closeout->ID);
+
+            echo '<p style="margin-bottom: 10px;">Closeout Invoice: <a href="' . esc_url($edit_link) . '"><strong>' . esc_html($invoice_number) . '</strong></a></p>';
+        }
+        // Show generate button if eligible
+        elseif (!empty($org_id) && $billing_status !== 'Invoiced') {
+            $url = wp_nonce_url(
+                admin_url('admin-post.php?action=bbab_generate_project_closeout&project_id=' . $post->ID),
+                'bbab_generate_project_closeout_' . $post->ID
+            );
+
+            echo '<a href="' . esc_url($url) . '" class="button button-primary" style="width: 100%; text-align: center; background: #059669; border-color: #059669;">Generate Closeout Invoice</a>';
+
+            if (!empty($warnings)) {
+                echo '<p style="color: #92400e; font-size: 10px; margin-top: 6px;">Proceeding will exclude warned milestones from billing.</p>';
+            }
+        }
+        // Show why we can't generate
+        else {
+            echo '<p style="color: #dc2626; font-size: 12px;">';
+            if (empty($org_id)) {
+                echo 'Cannot generate: No organization linked.';
+            } elseif ($billing_status === 'Invoiced') {
+                echo 'Project already closed out.';
+            }
+            echo '</p>';
+        }
+
+        echo '</div>';
+    }
+
+    /**
+     * Add row actions to project list.
+     *
+     * @param array    $actions Existing actions.
+     * @param \WP_Post $post    The post object.
+     * @return array Modified actions.
+     */
+    public static function addRowActions(array $actions, \WP_Post $post): array {
+        if ($post->post_type !== 'project') {
+            return $actions;
+        }
+
+        // Check if project already closed out
+        $billing_status = get_post_meta($post->ID, 'billing_status', true) ?: 'Not Started';
+        if ($billing_status === 'Invoiced') {
+            return $actions;
+        }
+
+        // Check if project has an organization
+        $org_id = get_post_meta($post->ID, 'organization', true);
+        if (empty($org_id)) {
+            return $actions;
+        }
+
+        $url = wp_nonce_url(
+            admin_url('admin-post.php?action=bbab_generate_project_closeout&project_id=' . $post->ID),
+            'bbab_generate_project_closeout_' . $post->ID
+        );
+
+        $actions['generate_closeout'] = '<a href="' . esc_url($url) . '" style="color: #059669; font-weight: 500;">Generate Closeout Invoice</a>';
+
+        return $actions;
     }
 
     /**

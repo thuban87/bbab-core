@@ -196,6 +196,35 @@ class InvoiceService {
     }
 
     /**
+     * Get closeout invoice for a project.
+     *
+     * @param int $project_id Project post ID.
+     * @return \WP_Post|null Closeout invoice or null.
+     */
+    public static function getCloseoutForProject(int $project_id): ?\WP_Post {
+        $invoices = get_posts([
+            'post_type' => 'invoice',
+            'posts_per_page' => 1,
+            'post_status' => 'publish',
+            'meta_query' => [
+                'relation' => 'AND',
+                [
+                    'key' => 'related_project',
+                    'value' => $project_id,
+                    'compare' => '=',
+                ],
+                [
+                    'key' => 'is_closeout_invoice',
+                    'value' => '1',
+                    'compare' => '=',
+                ],
+            ],
+        ]);
+
+        return !empty($invoices) ? $invoices[0] : null;
+    }
+
+    /**
      * Get invoice status.
      *
      * @param int $invoice_id Invoice post ID.

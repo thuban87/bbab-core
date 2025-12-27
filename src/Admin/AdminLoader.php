@@ -19,6 +19,7 @@ use BBAB\ServiceCenter\Admin\Metaboxes\TimeEntryReassignMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\ProjectMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\MilestoneMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\InvoiceMetabox;
+use BBAB\ServiceCenter\Admin\Metaboxes\LineItemMetabox;
 use BBAB\ServiceCenter\Admin\GlobalTimerIndicator;
 use BBAB\ServiceCenter\Admin\LineItemLinker;
 use BBAB\ServiceCenter\Modules\TimeTracking\TimeEntryService;
@@ -31,6 +32,7 @@ use BBAB\ServiceCenter\Modules\Projects\MilestoneReferenceGenerator;
 use BBAB\ServiceCenter\Modules\Projects\TitleSync;
 use BBAB\ServiceCenter\Modules\Billing\InvoiceReferenceGenerator;
 use BBAB\ServiceCenter\Modules\Billing\InvoiceTitleSync;
+use BBAB\ServiceCenter\Modules\Billing\InvoiceGenerator;
 use BBAB\ServiceCenter\Modules\Billing\LineItemService;
 use BBAB\ServiceCenter\Utils\Logger;
 
@@ -106,6 +108,9 @@ class AdminLoader {
         InvoiceTitleSync::register();
         LineItemService::register();
 
+        // Initialize Invoice Generator (Phase 5.4)
+        InvoiceGenerator::register();
+
         // Initialize admin columns and filters (Phase 4.3)
         ServiceRequestColumns::register();
         TimeEntryColumns::register();
@@ -134,6 +139,9 @@ class AdminLoader {
 
         // Initialize Invoice metaboxes (Phase 5.3)
         InvoiceMetabox::register();
+
+        // Initialize Line Item metaboxes (Phase 5.4)
+        LineItemMetabox::register();
 
         // Initialize global timer indicator (Phase 4.3)
         GlobalTimerIndicator::register();
