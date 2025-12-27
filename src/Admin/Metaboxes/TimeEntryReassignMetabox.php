@@ -216,15 +216,23 @@ class TimeEntryReassignMetabox {
         $items = [];
 
         if ($item_type === 'service_request') {
+            // Only show open SRs (exclude completed and cancelled)
+            // Migrated from: WPCode Snippet #1721
             $posts = get_posts([
                 'post_type' => 'service_request',
                 'posts_per_page' => -1,
                 'post_status' => 'publish',
                 'meta_query' => [
+                    'relation' => 'AND',
                     [
                         'key' => 'organization',
                         'value' => $org_id,
                         'compare' => '=',
+                    ],
+                    [
+                        'key' => 'request_status',
+                        'value' => ['completed', 'cancelled'],
+                        'compare' => 'NOT IN',
                     ],
                 ],
                 'orderby' => 'date',
@@ -241,15 +249,22 @@ class TimeEntryReassignMetabox {
                 ];
             }
         } elseif ($item_type === 'project') {
+            // Only show active projects (exclude Completed and Cancelled)
             $posts = get_posts([
                 'post_type' => 'project',
                 'posts_per_page' => -1,
                 'post_status' => 'publish',
                 'meta_query' => [
+                    'relation' => 'AND',
                     [
                         'key' => 'organization',
                         'value' => $org_id,
                         'compare' => '=',
+                    ],
+                    [
+                        'key' => 'project_status',
+                        'value' => ['Completed', 'Cancelled'],
+                        'compare' => 'NOT IN',
                     ],
                 ],
                 'orderby' => 'title',
@@ -265,31 +280,44 @@ class TimeEntryReassignMetabox {
                 ];
             }
         } elseif ($item_type === 'milestone') {
-            // First get all projects for this org
+            // First get active projects for this org (exclude Completed/Cancelled)
             $project_ids = get_posts([
                 'post_type' => 'project',
                 'posts_per_page' => -1,
                 'post_status' => 'publish',
                 'fields' => 'ids',
                 'meta_query' => [
+                    'relation' => 'AND',
                     [
                         'key' => 'organization',
                         'value' => $org_id,
                         'compare' => '=',
                     ],
+                    [
+                        'key' => 'project_status',
+                        'value' => ['Completed', 'Cancelled'],
+                        'compare' => 'NOT IN',
+                    ],
                 ],
             ]);
 
             if (!empty($project_ids)) {
+                // Get milestones that aren't completed
                 $milestones = get_posts([
                     'post_type' => 'milestone',
                     'posts_per_page' => -1,
                     'post_status' => 'publish',
                     'meta_query' => [
+                        'relation' => 'AND',
                         [
                             'key' => 'related_project',
                             'value' => $project_ids,
                             'compare' => 'IN',
+                        ],
+                        [
+                            'key' => 'milestone_status',
+                            'value' => 'Completed',
+                            'compare' => '!=',
                         ],
                     ],
                     'orderby' => 'title',
