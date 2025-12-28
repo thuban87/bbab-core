@@ -15,6 +15,7 @@ use BBAB\ServiceCenter\Admin\Columns\MilestoneColumns;
 use BBAB\ServiceCenter\Admin\Columns\InvoiceColumns;
 use BBAB\ServiceCenter\Admin\Columns\LineItemColumns;
 use BBAB\ServiceCenter\Admin\Columns\ProjectReportColumns;
+use BBAB\ServiceCenter\Admin\Columns\KBColumns;
 use BBAB\ServiceCenter\Admin\RowActions\LogTimeAction;
 use BBAB\ServiceCenter\Admin\RowActions\MonthlyReportActions;
 use BBAB\ServiceCenter\Admin\Metaboxes\ServiceRequestMetabox;
@@ -148,6 +149,9 @@ class AdminLoader {
 
         // Initialize Project Report columns (Phase 7.3)
         ProjectReportColumns::register();
+
+        // Initialize KB Article columns (Phase 7.4)
+        KBColumns::register();
 
         // Initialize Project/Milestone reference metaboxes (Phase 5.1)
         ProjectMilestoneRefColumns::register();

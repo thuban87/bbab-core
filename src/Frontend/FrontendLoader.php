@@ -36,6 +36,9 @@ use BBAB\ServiceCenter\Frontend\Shortcodes\Billing\SupportHistory;
 use BBAB\ServiceCenter\Frontend\Shortcodes\Billing\InvoiceArchive;
 use BBAB\ServiceCenter\Frontend\Shortcodes\Billing\InvoiceDetail;
 use BBAB\ServiceCenter\Frontend\Shortcodes\Dashboard\ProjectPayments;
+use BBAB\ServiceCenter\Frontend\Shortcodes\Dashboard\KBLink;
+use BBAB\ServiceCenter\Frontend\Shortcodes\KnowledgeBase\KBArchive;
+use BBAB\ServiceCenter\Modules\KnowledgeBase\TaxonomyHandler;
 use BBAB\ServiceCenter\Utils\Logger;
 
 /**
@@ -73,6 +76,9 @@ class FrontendLoader {
         // Register project archive filter and milestone loop filter (Phase 5.2)
         ProjectArchiveFilter::register();
         MilestoneLoopFilter::register();
+
+        // Register KB taxonomy handler (Phase 7.4)
+        TaxonomyHandler::register();
 
         // Register shortcodes
         $this->registerShortcodes();
@@ -129,6 +135,9 @@ class FrontendLoader {
             InvoiceDetail::class,
             // Dashboard Project Payments (Phase 6.2)
             ProjectPayments::class,
+            // Knowledge Base shortcodes (Phase 7.4)
+            KBArchive::class,
+            KBLink::class,
         ];
 
         foreach ($shortcode_classes as $class) {
