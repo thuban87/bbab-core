@@ -14,6 +14,7 @@ use BBAB\ServiceCenter\Admin\Columns\ProjectColumns;
 use BBAB\ServiceCenter\Admin\Columns\MilestoneColumns;
 use BBAB\ServiceCenter\Admin\Columns\InvoiceColumns;
 use BBAB\ServiceCenter\Admin\Columns\LineItemColumns;
+use BBAB\ServiceCenter\Admin\Columns\ProjectReportColumns;
 use BBAB\ServiceCenter\Admin\RowActions\LogTimeAction;
 use BBAB\ServiceCenter\Admin\RowActions\MonthlyReportActions;
 use BBAB\ServiceCenter\Admin\Metaboxes\ServiceRequestMetabox;
@@ -23,7 +24,9 @@ use BBAB\ServiceCenter\Admin\Metaboxes\ProjectMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\MilestoneMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\InvoiceMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\LineItemMetabox;
+use BBAB\ServiceCenter\Admin\Metaboxes\ProjectReportMetabox;
 use BBAB\ServiceCenter\Admin\GlobalTimerIndicator;
+use BBAB\ServiceCenter\Admin\ProjectReportFieldFilter;
 use BBAB\ServiceCenter\Admin\LineItemLinker;
 use BBAB\ServiceCenter\Modules\TimeTracking\TimeEntryService;
 use BBAB\ServiceCenter\Modules\TimeTracking\TimerService;
@@ -33,6 +36,8 @@ use BBAB\ServiceCenter\Modules\ServiceRequests\FormProcessor;
 use BBAB\ServiceCenter\Modules\Projects\ProjectReferenceGenerator;
 use BBAB\ServiceCenter\Modules\Projects\MilestoneReferenceGenerator;
 use BBAB\ServiceCenter\Modules\Projects\TitleSync;
+use BBAB\ServiceCenter\Modules\Projects\ProjectReportReferenceGenerator;
+use BBAB\ServiceCenter\Modules\Projects\ProjectReportTitleSync;
 use BBAB\ServiceCenter\Modules\Billing\InvoiceReferenceGenerator;
 use BBAB\ServiceCenter\Modules\Billing\InvoiceTitleSync;
 use BBAB\ServiceCenter\Modules\Billing\InvoiceGenerator;
@@ -115,6 +120,10 @@ class AdminLoader {
         MilestoneReferenceGenerator::register();
         TitleSync::register();
 
+        // Initialize Project Report services (Phase 7.3)
+        ProjectReportReferenceGenerator::register();
+        ProjectReportTitleSync::register();
+
         // Initialize Invoice/Billing services (Phase 5.3)
         InvoiceReferenceGenerator::register();
         InvoiceTitleSync::register();
@@ -136,6 +145,9 @@ class AdminLoader {
 
         // Initialize Line Item columns (Phase 6.1)
         LineItemColumns::register();
+
+        // Initialize Project Report columns (Phase 7.3)
+        ProjectReportColumns::register();
 
         // Initialize Project/Milestone reference metaboxes (Phase 5.1)
         ProjectMilestoneRefColumns::register();
@@ -160,6 +172,12 @@ class AdminLoader {
 
         // Initialize Line Item metaboxes (Phase 5.4)
         LineItemMetabox::register();
+
+        // Initialize Project Report metaboxes (Phase 7.3)
+        ProjectReportMetabox::register();
+
+        // Initialize Project Report field filtering (Phase 7.3)
+        ProjectReportFieldFilter::register();
 
         // Initialize global timer indicator (Phase 4.3)
         GlobalTimerIndicator::register();
