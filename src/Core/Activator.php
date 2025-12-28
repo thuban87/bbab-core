@@ -95,6 +95,21 @@ class Activator {
         if (!wp_next_scheduled('bbab_sc_forgotten_timer_check')) {
             wp_schedule_event(time(), 'thirty_minutes', 'bbab_sc_forgotten_timer_check');
         }
+
+        // Billing cron - runs daily at 4am Chicago time
+        // Clean up old snippet event if exists
+        $old_billing = wp_next_scheduled('bbab_daily_billing_cron');
+        if ($old_billing) {
+            wp_unschedule_event($old_billing, 'bbab_daily_billing_cron');
+        }
+
+        // Schedule the new billing cron
+        if (!wp_next_scheduled('bbab_sc_billing_cron')) {
+            // Calculate next 4am Chicago time
+            $chicago_tz = new \DateTimeZone('America/Chicago');
+            $chicago_time = new \DateTime('tomorrow 4:00am', $chicago_tz);
+            wp_schedule_event($chicago_time->getTimestamp(), 'daily', 'bbab_sc_billing_cron');
+        }
     }
 
     /**

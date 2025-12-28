@@ -6,6 +6,8 @@ namespace BBAB\ServiceCenter\Core;
 use BBAB\ServiceCenter\Admin\AdminLoader;
 use BBAB\ServiceCenter\Cron\CronLoader;
 use BBAB\ServiceCenter\Frontend\FrontendLoader;
+use BBAB\ServiceCenter\Modules\Billing\StripeService;
+use BBAB\ServiceCenter\Modules\Billing\StripeWebhook;
 use BBAB\ServiceCenter\Utils\Cache;
 use BBAB\ServiceCenter\Utils\Logger;
 
@@ -67,6 +69,9 @@ class Plugin {
         // Load cron handlers (always, for scheduling)
         $this->loadCron();
 
+        // Load billing/payment handlers (always - needed for AJAX and webhooks)
+        $this->loadBilling();
+
         // Log plugin initialization in debug mode
         Logger::debug('Plugin', 'BBAB Service Center initialized', [
             'version' => BBAB_SC_VERSION,
@@ -96,6 +101,21 @@ class Plugin {
     private function loadCron(): void {
         $cron_loader = new CronLoader();
         $cron_loader->register();
+    }
+
+    /**
+     * Load billing/payment handlers.
+     *
+     * Registers Stripe AJAX handlers and REST API webhook endpoint.
+     */
+    private function loadBilling(): void {
+        // Register Stripe service (AJAX handlers)
+        $stripe_service = new StripeService();
+        $stripe_service->register();
+
+        // Register Stripe webhook handler (REST API endpoint)
+        $stripe_webhook = new StripeWebhook($stripe_service);
+        $stripe_webhook->register();
     }
 
     /**

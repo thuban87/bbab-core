@@ -8,9 +8,10 @@ use BBAB\ServiceCenter\Modules\Analytics\PageSpeedService;
 use BBAB\ServiceCenter\Modules\Hosting\UptimeService;
 use BBAB\ServiceCenter\Modules\Hosting\SSLService;
 use BBAB\ServiceCenter\Modules\Hosting\BackupService;
+use BBAB\ServiceCenter\Cron\ForgottenTimerHandler;
+use BBAB\ServiceCenter\Cron\BillingCronHandler;
 use BBAB\ServiceCenter\Utils\Cache;
 use BBAB\ServiceCenter\Utils\Logger;
-use BBAB\ServiceCenter\Cron\ForgottenTimerHandler;
 
 /**
  * Registers and handles all cron jobs.
@@ -41,6 +42,10 @@ class CronLoader {
 
         // Forgotten timer check - runs every 30 minutes
         add_action('bbab_sc_forgotten_timer_check', [ForgottenTimerHandler::class, 'check']);
+
+        // Daily billing cron - marks overdue, applies late fees
+        $billing_cron = new BillingCronHandler();
+        $billing_cron->register();
 
         Logger::debug('CronLoader', 'Cron hooks registered');
     }

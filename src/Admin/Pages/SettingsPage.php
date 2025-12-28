@@ -100,6 +100,46 @@ class SettingsPage {
             $existing['forgotten_timer_email'] = sanitize_email($input['forgotten_timer_email']);
         }
 
+        // Sanitize Billing settings
+        if (isset($input['zelle_email'])) {
+            $existing['zelle_email'] = sanitize_email($input['zelle_email']);
+        }
+
+        if (isset($input['cc_fee_percentage'])) {
+            $existing['cc_fee_percentage'] = floatval($input['cc_fee_percentage']);
+        }
+
+        if (isset($input['hourly_rate'])) {
+            $existing['hourly_rate'] = floatval($input['hourly_rate']);
+        }
+
+        if (isset($input['pdf_logo_url'])) {
+            $existing['pdf_logo_url'] = esc_url_raw($input['pdf_logo_url']);
+        }
+
+        // Sanitize Stripe settings
+        $existing['stripe_test_mode'] = isset($input['stripe_test_mode']) && $input['stripe_test_mode'] === '1';
+
+        if (isset($input['stripe_test_publishable_key'])) {
+            $existing['stripe_test_publishable_key'] = sanitize_text_field($input['stripe_test_publishable_key']);
+        }
+
+        if (isset($input['stripe_test_secret_key'])) {
+            $existing['stripe_test_secret_key'] = sanitize_text_field($input['stripe_test_secret_key']);
+        }
+
+        if (isset($input['stripe_live_publishable_key'])) {
+            $existing['stripe_live_publishable_key'] = sanitize_text_field($input['stripe_live_publishable_key']);
+        }
+
+        if (isset($input['stripe_live_secret_key'])) {
+            $existing['stripe_live_secret_key'] = sanitize_text_field($input['stripe_live_secret_key']);
+        }
+
+        if (isset($input['stripe_webhook_secret'])) {
+            $existing['stripe_webhook_secret'] = sanitize_text_field($input['stripe_webhook_secret']);
+        }
+
         Logger::debug('SettingsPage', 'Settings saved');
 
         return $existing;
@@ -274,6 +314,243 @@ class SettingsPage {
                                    class="regular-text">
                             <p class="description">
                                 <?php esc_html_e('Email address to receive alerts when a timer has been running 4+ hours.', 'bbab-service-center'); ?>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Billing Section -->
+                    <tr>
+                        <th colspan="2" style="padding-bottom: 0;">
+                            <h2 style="margin: 20px 0 0 0; padding: 10px 0; border-bottom: 1px solid #ccc;">
+                                Billing & Payments
+                            </h2>
+                        </th>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="zelle_email"><?php esc_html_e('Zelle Email', 'bbab-service-center'); ?></label>
+                        </th>
+                        <td>
+                            <input type="email"
+                                   id="zelle_email"
+                                   name="<?php echo esc_attr(self::OPTION_NAME); ?>[zelle_email]"
+                                   value="<?php echo esc_attr($settings['zelle_email'] ?? 'wales108@gmail.com'); ?>"
+                                   class="regular-text">
+                            <p class="description">
+                                <?php esc_html_e('Email address displayed on invoices for Zelle payments.', 'bbab-service-center'); ?>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="cc_fee_percentage"><?php esc_html_e('Credit Card Fee %', 'bbab-service-center'); ?></label>
+                        </th>
+                        <td>
+                            <input type="number"
+                                   id="cc_fee_percentage"
+                                   name="<?php echo esc_attr(self::OPTION_NAME); ?>[cc_fee_percentage]"
+                                   value="<?php echo esc_attr($settings['cc_fee_percentage'] ?? 0.03); ?>"
+                                   class="small-text"
+                                   step="0.001"
+                                   min="0"
+                                   max="1">
+                            <p class="description">
+                                <?php esc_html_e('Credit card processing fee as decimal (e.g., 0.03 = 3%). Applied to card payments.', 'bbab-service-center'); ?>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="hourly_rate"><?php esc_html_e('Default Hourly Rate', 'bbab-service-center'); ?></label>
+                        </th>
+                        <td>
+                            <input type="number"
+                                   id="hourly_rate"
+                                   name="<?php echo esc_attr(self::OPTION_NAME); ?>[hourly_rate]"
+                                   value="<?php echo esc_attr($settings['hourly_rate'] ?? 30); ?>"
+                                   class="small-text"
+                                   step="0.01"
+                                   min="0">
+                            <p class="description">
+                                <?php esc_html_e('Default hourly rate for support/overage billing (per hour).', 'bbab-service-center'); ?>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="pdf_logo_url"><?php esc_html_e('PDF Logo URL', 'bbab-service-center'); ?></label>
+                        </th>
+                        <td>
+                            <input type="url"
+                                   id="pdf_logo_url"
+                                   name="<?php echo esc_attr(self::OPTION_NAME); ?>[pdf_logo_url]"
+                                   value="<?php echo esc_attr($settings['pdf_logo_url'] ?? ''); ?>"
+                                   class="large-text">
+                            <p class="description">
+                                <?php esc_html_e('Full URL to logo image for invoice PDFs. Leave blank for default.', 'bbab-service-center'); ?>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Stripe Payments Section -->
+                    <tr>
+                        <th colspan="2" style="padding-bottom: 0;">
+                            <h2 style="margin: 20px 0 0 0; padding: 10px 0; border-bottom: 1px solid #ccc;">
+                                Stripe Payments
+                            </h2>
+                        </th>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <?php esc_html_e('Test Mode', 'bbab-service-center'); ?>
+                        </th>
+                        <td>
+                            <label>
+                                <input type="checkbox"
+                                       name="<?php echo esc_attr(self::OPTION_NAME); ?>[stripe_test_mode]"
+                                       value="1"
+                                       <?php checked($settings['stripe_test_mode'] ?? true); ?>>
+                                <?php esc_html_e('Use Stripe Test Mode (recommended during development)', 'bbab-service-center'); ?>
+                            </label>
+                            <p class="description">
+                                <?php esc_html_e('When enabled, uses test API keys. Uncheck for live payments.', 'bbab-service-center'); ?>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="stripe_test_publishable_key"><?php esc_html_e('Test Publishable Key', 'bbab-service-center'); ?></label>
+                        </th>
+                        <td>
+                            <input type="text"
+                                   id="stripe_test_publishable_key"
+                                   name="<?php echo esc_attr(self::OPTION_NAME); ?>[stripe_test_publishable_key]"
+                                   value="<?php echo esc_attr($settings['stripe_test_publishable_key'] ?? ''); ?>"
+                                   class="large-text"
+                                   placeholder="pk_test_...">
+                            <p class="description">
+                                <?php esc_html_e('Starts with pk_test_', 'bbab-service-center'); ?>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="stripe_test_secret_key"><?php esc_html_e('Test Secret Key', 'bbab-service-center'); ?></label>
+                        </th>
+                        <td>
+                            <?php
+                            $test_secret = $settings['stripe_test_secret_key'] ?? '';
+                            $test_secret_masked = !empty($test_secret) ? substr($test_secret, 0, 12) . '...' . substr($test_secret, -4) : '';
+                            ?>
+                            <input type="password"
+                                   id="stripe_test_secret_key"
+                                   name="<?php echo esc_attr(self::OPTION_NAME); ?>[stripe_test_secret_key]"
+                                   value="<?php echo esc_attr($test_secret); ?>"
+                                   class="large-text"
+                                   placeholder="sk_test_..."
+                                   autocomplete="off">
+                            <?php if (!empty($test_secret_masked)): ?>
+                                <p class="description" style="color: #1e8449;">
+                                    <?php echo esc_html('Currently set: ' . $test_secret_masked); ?>
+                                </p>
+                            <?php else: ?>
+                                <p class="description">
+                                    <?php esc_html_e('Starts with sk_test_ - Keep this secret!', 'bbab-service-center'); ?>
+                                </p>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="stripe_live_publishable_key"><?php esc_html_e('Live Publishable Key', 'bbab-service-center'); ?></label>
+                        </th>
+                        <td>
+                            <input type="text"
+                                   id="stripe_live_publishable_key"
+                                   name="<?php echo esc_attr(self::OPTION_NAME); ?>[stripe_live_publishable_key]"
+                                   value="<?php echo esc_attr($settings['stripe_live_publishable_key'] ?? ''); ?>"
+                                   class="large-text"
+                                   placeholder="pk_live_...">
+                            <p class="description">
+                                <?php esc_html_e('Starts with pk_live_ - For production use', 'bbab-service-center'); ?>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="stripe_live_secret_key"><?php esc_html_e('Live Secret Key', 'bbab-service-center'); ?></label>
+                        </th>
+                        <td>
+                            <?php
+                            $live_secret = $settings['stripe_live_secret_key'] ?? '';
+                            $live_secret_masked = !empty($live_secret) ? substr($live_secret, 0, 12) . '...' . substr($live_secret, -4) : '';
+                            ?>
+                            <input type="password"
+                                   id="stripe_live_secret_key"
+                                   name="<?php echo esc_attr(self::OPTION_NAME); ?>[stripe_live_secret_key]"
+                                   value="<?php echo esc_attr($live_secret); ?>"
+                                   class="large-text"
+                                   placeholder="sk_live_..."
+                                   autocomplete="off">
+                            <?php if (!empty($live_secret_masked)): ?>
+                                <p class="description" style="color: #1e8449;">
+                                    <?php echo esc_html('Currently set: ' . $live_secret_masked); ?>
+                                </p>
+                            <?php else: ?>
+                                <p class="description">
+                                    <?php esc_html_e('Starts with sk_live_ - Keep this secret!', 'bbab-service-center'); ?>
+                                </p>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="stripe_webhook_secret"><?php esc_html_e('Webhook Signing Secret', 'bbab-service-center'); ?></label>
+                        </th>
+                        <td>
+                            <?php
+                            $webhook_secret = $settings['stripe_webhook_secret'] ?? '';
+                            $webhook_masked = !empty($webhook_secret) ? substr($webhook_secret, 0, 12) . '...' . substr($webhook_secret, -4) : '';
+                            ?>
+                            <input type="password"
+                                   id="stripe_webhook_secret"
+                                   name="<?php echo esc_attr(self::OPTION_NAME); ?>[stripe_webhook_secret]"
+                                   value="<?php echo esc_attr($webhook_secret); ?>"
+                                   class="large-text"
+                                   placeholder="whsec_..."
+                                   autocomplete="off">
+                            <?php if (!empty($webhook_masked)): ?>
+                                <p class="description" style="color: #1e8449;">
+                                    <?php echo esc_html('Currently set: ' . $webhook_masked); ?>
+                                </p>
+                            <?php else: ?>
+                                <p class="description">
+                                    <?php esc_html_e('Starts with whsec_ - Get this from Stripe Webhooks settings', 'bbab-service-center'); ?>
+                                </p>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <?php esc_html_e('Webhook Endpoint', 'bbab-service-center'); ?>
+                        </th>
+                        <td>
+                            <code style="display: block; padding: 8px 12px; background: #f0f0f1; border-radius: 4px;">
+                                <?php echo esc_url(rest_url('bbab/v1/stripe-webhook')); ?>
+                            </code>
+                            <p class="description" style="margin-top: 8px;">
+                                <?php esc_html_e('Add this URL in your Stripe Dashboard > Developers > Webhooks. Enable checkout.session.completed and payment_intent.succeeded events.', 'bbab-service-center'); ?>
                             </p>
                         </td>
                     </tr>
@@ -521,6 +798,30 @@ class SettingsPage {
                     <tr>
                         <td><code>simulation_enabled</code></td>
                         <td><?php echo $settings['simulation_enabled'] ? 'true' : 'false'; ?></td>
+                    </tr>
+                    <tr>
+                        <td><code>zelle_email</code></td>
+                        <td><?php echo esc_html($settings['zelle_email'] ?: '(not set)'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><code>cc_fee_percentage</code></td>
+                        <td><?php echo esc_html($settings['cc_fee_percentage'] ?? '0.03'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><code>hourly_rate</code></td>
+                        <td><?php echo esc_html($settings['hourly_rate'] ?? '30'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><code>pdf_logo_url</code></td>
+                        <td><?php echo esc_html($settings['pdf_logo_url'] ?: '(default)'); ?></td>
+                    </tr>
+                    <tr>
+                        <td><code>stripe_test_mode</code></td>
+                        <td><?php echo ($settings['stripe_test_mode'] ?? true) ? 'true (using test keys)' : 'false (LIVE!)'; ?></td>
+                    </tr>
+                    <tr>
+                        <td><code>stripe_configured</code></td>
+                        <td><?php echo Settings::isStripeConfigured() ? '<span style="color:#1e8449;">Yes</span>' : '<span style="color:#b32d2e;">No - add API keys</span>'; ?></td>
                     </tr>
                 </tbody>
             </table>
