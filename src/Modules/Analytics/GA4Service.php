@@ -509,6 +509,14 @@ class GA4Service {
      * Make a request to the GA4 Data API.
      */
     private static function makeApiRequest(string $property_id, array $request_body, string $token): ?array {
+        // Sanitize property_id - must be numeric only
+        $property_id = preg_replace('/[^0-9]/', '', $property_id);
+
+        if (empty($property_id)) {
+            Logger::error('GA4Service', 'Invalid property ID after sanitization');
+            return null;
+        }
+
         $response = wp_remote_post(
             "https://analyticsdata.googleapis.com/v1beta/properties/{$property_id}:runReport",
             [

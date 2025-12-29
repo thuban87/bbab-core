@@ -354,13 +354,76 @@ class CronLoader {
 
     /**
      * Run cleanup tasks.
+     *
+     * Cleans up:
+     * - Expired transients with our prefix (WordPress doesn't auto-delete from DB)
+     * - Very old cached data (>7 days) that might be stale
      */
     public function runCleanup(): void {
         Logger::debug('CronLoader', 'Cleanup cron: Starting');
 
-        // Clean up old transients, logs, etc.
-        // TODO: Implement cleanup logic
+        $stats = [
+            'expired_transients' => 0,
+            'stale_analytics' => 0,
+        ];
 
-        Logger::debug('CronLoader', 'Cleanup cron: Completed');
+        global $wpdb;
+
+        // 1. Delete expired transients with our prefix
+        // WordPress marks them expired but doesn't remove from DB
+        $expired_count = $wpdb->query(
+            "DELETE a, b FROM {$wpdb->options} a
+             INNER JOIN {$wpdb->options} b ON b.option_name = CONCAT('_transient_timeout_', SUBSTRING(a.option_name, 12))
+             WHERE a.option_name LIKE '_transient_bbab_sc_%'
+             AND b.option_value < UNIX_TIMESTAMP()"
+        );
+        $stats['expired_transients'] = (int) $expired_count;
+
+        // 2. Clean up analytics cache older than 7 days
+        // These should refresh daily, so anything >7 days is definitely stale
+        $seven_days_ago = time() - (7 * DAY_IN_SECONDS);
+
+        // Find and delete stale GA4 transients
+        $stale_keys = $wpdb->get_col($wpdb->prepare(
+            "SELECT option_name FROM {$wpdb->options}
+             WHERE option_name LIKE %s
+             AND option_name NOT LIKE %s",
+            '_transient_bbab_sc_ga4_%',
+            '_transient_timeout_%'
+        ));
+
+        foreach ($stale_keys as $option_name) {
+            $value = get_option($option_name);
+            if (is_array($value) && isset($value['data']['fetched_at'])) {
+                if ($value['data']['fetched_at'] < $seven_days_ago) {
+                    delete_option($option_name);
+                    // Also delete the timeout entry
+                    delete_option(str_replace('_transient_', '_transient_timeout_', $option_name));
+                    $stats['stale_analytics']++;
+                }
+            }
+        }
+
+        // Same for PageSpeed/CWV transients
+        $stale_cwv_keys = $wpdb->get_col($wpdb->prepare(
+            "SELECT option_name FROM {$wpdb->options}
+             WHERE option_name LIKE %s
+             AND option_name NOT LIKE %s",
+            '_transient_bbab_sc_cwv_%',
+            '_transient_timeout_%'
+        ));
+
+        foreach ($stale_cwv_keys as $option_name) {
+            $value = get_option($option_name);
+            if (is_array($value) && isset($value['data']['fetched_at'])) {
+                if ($value['data']['fetched_at'] < $seven_days_ago) {
+                    delete_option($option_name);
+                    delete_option(str_replace('_transient_', '_transient_timeout_', $option_name));
+                    $stats['stale_analytics']++;
+                }
+            }
+        }
+
+        Logger::info('CronLoader', 'Cleanup cron: Completed', $stats);
     }
 }

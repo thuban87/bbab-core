@@ -33,6 +33,7 @@ use BBAB\ServiceCenter\Admin\Metaboxes\LineItemMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\ProjectReportMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\MonthlyReportMetabox;
 use BBAB\ServiceCenter\Admin\GlobalTimerIndicator;
+use BBAB\ServiceCenter\Admin\AdminBarHealth;
 use BBAB\ServiceCenter\Admin\ProjectReportFieldFilter;
 use BBAB\ServiceCenter\Admin\LineItemLinker;
 use BBAB\ServiceCenter\Modules\TimeTracking\TimeEntryService;
@@ -212,6 +213,9 @@ class AdminLoader {
 
         // Initialize admin simulation bar (shows when simulating an org)
         AdminSimulationBar::register();
+
+        // Initialize admin bar health indicator (Phase 7 Review)
+        AdminBarHealth::register();
 
         // Register assets
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);

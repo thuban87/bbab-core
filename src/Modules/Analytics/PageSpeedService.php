@@ -190,6 +190,14 @@ class PageSpeedService {
      * @return array|null Metrics or null on failure
      */
     private static function fetchSingleStrategy(string $site_url, string $strategy, string $api_key): ?array {
+        // Sanitize and validate URL
+        $site_url = esc_url_raw($site_url);
+
+        if (empty($site_url) || !filter_var($site_url, FILTER_VALIDATE_URL)) {
+            Logger::error('PageSpeedService', 'Invalid site URL', ['url' => $site_url]);
+            return null;
+        }
+
         $api_url = add_query_arg([
             'url' => $site_url,
             'strategy' => $strategy,
