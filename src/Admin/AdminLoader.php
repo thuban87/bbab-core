@@ -32,6 +32,7 @@ use BBAB\ServiceCenter\Admin\Metaboxes\InvoiceMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\LineItemMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\ProjectReportMetabox;
 use BBAB\ServiceCenter\Admin\Metaboxes\MonthlyReportMetabox;
+use BBAB\ServiceCenter\Admin\Metaboxes\RoadmapMetabox;
 use BBAB\ServiceCenter\Admin\GlobalTimerIndicator;
 use BBAB\ServiceCenter\Admin\AdminBarHealth;
 use BBAB\ServiceCenter\Admin\ProjectReportFieldFilter;
@@ -204,6 +205,9 @@ class AdminLoader {
 
         // Initialize Monthly Report metaboxes (Phase 7.6)
         MonthlyReportMetabox::register();
+
+        // Initialize Roadmap metaboxes (Phase 7 staging fixes)
+        RoadmapMetabox::register();
 
         // Initialize Project Report field filtering (Phase 7.3)
         ProjectReportFieldFilter::register();

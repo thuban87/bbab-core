@@ -39,6 +39,16 @@ class MonthlyReportMetabox {
             'side',
             'default'
         );
+
+        // Report PDF (sidebar)
+        add_meta_box(
+            'bbab_monthly_report_pdf',
+            'Report PDF',
+            [self::class, 'renderPDFMetabox'],
+            'monthly_report',
+            'side',
+            'default'
+        );
     }
 
     /**
@@ -149,6 +159,77 @@ class MonthlyReportMetabox {
     }
 
     /**
+     * Render PDF metabox.
+     *
+     * Shows the attached report PDF with view/download options.
+     *
+     * @param \WP_Post $post The post object.
+     */
+    public static function renderPDFMetabox(\WP_Post $post): void {
+        $post_id = $post->ID;
+
+        // Get report PDF - can be stored as attachment ID or array from Pods
+        $pdf_url = null;
+        $pdf_filename = null;
+
+        // Try Pods first
+        if (function_exists('pods')) {
+            $pod = pods('monthly_report', $post_id);
+            if ($pod) {
+                $pdf = $pod->field('report_pdf');
+                if ($pdf && !empty($pdf['guid'])) {
+                    $pdf_url = $pdf['guid'];
+                    $pdf_filename = $pdf['post_title'] ?? basename($pdf_url);
+                } elseif ($pdf && !empty($pdf['ID'])) {
+                    $pdf_url = wp_get_attachment_url($pdf['ID']);
+                    $pdf_filename = get_the_title($pdf['ID']) ?: basename($pdf_url);
+                }
+            }
+        }
+
+        // Fallback to raw meta
+        if (!$pdf_url) {
+            $pdf_id = get_post_meta($post_id, 'report_pdf', true);
+            if ($pdf_id) {
+                $pdf_url = wp_get_attachment_url($pdf_id);
+                if ($pdf_url) {
+                    $pdf_filename = get_the_title($pdf_id) ?: basename($pdf_url);
+                }
+            }
+        }
+
+        // Render metabox content
+        if ($pdf_url) {
+            // Has PDF attached
+            echo '<div class="bbab-pdf-container">';
+
+            // File info
+            echo '<div class="bbab-pdf-file-info">';
+            echo '<span class="dashicons dashicons-pdf" style="color: #dc2626; margin-right: 5px;"></span>';
+            echo '<span class="bbab-pdf-filename">' . esc_html($pdf_filename) . '</span>';
+            echo '</div>';
+
+            // Action buttons
+            echo '<div class="bbab-pdf-actions">';
+            echo '<a href="' . esc_url($pdf_url) . '" target="_blank" class="button button-primary">';
+            echo '<span class="dashicons dashicons-visibility" style="margin-top: 4px;"></span> View';
+            echo '</a>';
+            echo '<a href="' . esc_url($pdf_url) . '" download class="button">';
+            echo '<span class="dashicons dashicons-download" style="margin-top: 4px;"></span> Download';
+            echo '</a>';
+            echo '</div>';
+
+            echo '</div>';
+        } else {
+            // No PDF attached
+            echo '<div class="bbab-pdf-empty">';
+            echo '<p><span class="dashicons dashicons-media-document" style="color: #666;"></span> No PDF attached.</p>';
+            echo '<p class="description">Use the Report PDF field above to attach a document.</p>';
+            echo '</div>';
+        }
+    }
+
+    /**
      * Render admin styles for metaboxes.
      */
     public static function renderStyles(): void {
@@ -160,6 +241,7 @@ class MonthlyReportMetabox {
         echo '<style>
             /* Sidebar Metaboxes */
             #bbab_monthly_report_time_entries .inside { margin: 0; padding: 0; }
+            #bbab_monthly_report_pdf .inside { margin: 0; padding: 12px; }
 
             /* Group Headers */
             .bbab-group-header-green {
@@ -190,6 +272,48 @@ class MonthlyReportMetabox {
 
             /* Scroll Container */
             .bbab-scroll-container { max-height: 400px; overflow-y: auto; }
+
+            /* PDF Metabox */
+            .bbab-pdf-container {
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                padding: 12px;
+            }
+            .bbab-pdf-file-info {
+                display: flex;
+                align-items: center;
+                margin-bottom: 12px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid #e5e7eb;
+            }
+            .bbab-pdf-filename {
+                font-weight: 500;
+                word-break: break-word;
+            }
+            .bbab-pdf-actions {
+                display: flex;
+                gap: 8px;
+            }
+            .bbab-pdf-actions .button {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+            }
+            .bbab-pdf-actions .dashicons {
+                font-size: 16px;
+                width: 16px;
+                height: 16px;
+            }
+            .bbab-pdf-empty {
+                text-align: center;
+                padding: 10px;
+            }
+            .bbab-pdf-empty p { margin: 0 0 8px 0; }
+            .bbab-pdf-empty .description { color: #666; font-size: 12px; }
+            .bbab-pdf-empty .dashicons { vertical-align: middle; margin-right: 4px; }
         </style>';
     }
 }

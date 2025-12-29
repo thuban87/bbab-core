@@ -112,7 +112,8 @@ class ClientTaskColumns {
 
             case 'due_date':
                 $due_date = get_post_meta($post_id, 'due_date', true);
-                if (!empty($due_date)) {
+                // Treat empty, '0000-00-00', and '0000-00-00 00:00:00' as no date
+                if (!empty($due_date) && $due_date !== '0000-00-00' && $due_date !== '0000-00-00 00:00:00') {
                     $timestamp = strtotime($due_date);
                     $today = strtotime('today');
                     $tomorrow = strtotime('tomorrow');
@@ -288,13 +289,11 @@ class ClientTaskColumns {
 
         $meta_query = $query->get('meta_query') ?: [];
 
-        // Organization filter
+        // Organization filter - uses wp_podsrel table (field_id 1320)
         if (!empty($_GET['bbab_org'])) {
-            $meta_query[] = [
-                'key' => 'organization',
-                'value' => absint($_GET['bbab_org']),
-                'compare' => '=',
-            ];
+            // Store the org ID for use in the posts_where filter
+            $query->set('bbab_filter_org_id', absint($_GET['bbab_org']));
+            add_filter('posts_where', [self::class, 'filterByOrgWhere'], 10, 2);
         }
 
         // Status filter
@@ -309,6 +308,39 @@ class ClientTaskColumns {
         if (!empty($meta_query)) {
             $query->set('meta_query', $meta_query);
         }
+    }
+
+    /**
+     * Filter posts by organization using wp_podsrel join.
+     *
+     * Client Tasks store organization relationship in wp_podsrel table,
+     * not in postmeta, so we need a custom WHERE clause.
+     *
+     * @param string    $where The WHERE clause.
+     * @param \WP_Query $query The query object.
+     * @return string Modified WHERE clause.
+     */
+    public static function filterByOrgWhere(string $where, \WP_Query $query): string {
+        global $wpdb;
+
+        $org_id = $query->get('bbab_filter_org_id');
+        if (!$org_id) {
+            return $where;
+        }
+
+        // Field ID 1320 is the organization field for client_task pod
+        $where .= $wpdb->prepare(
+            " AND {$wpdb->posts}.ID IN (
+                SELECT item_id FROM {$wpdb->prefix}podsrel
+                WHERE field_id = 1320 AND related_item_id = %d
+            )",
+            $org_id
+        );
+
+        // Remove the filter to prevent it from affecting other queries
+        remove_filter('posts_where', [self::class, 'filterByOrgWhere'], 10);
+
+        return $where;
     }
 
     /**

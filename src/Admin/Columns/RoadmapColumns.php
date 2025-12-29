@@ -110,7 +110,7 @@ class RoadmapColumns {
         switch ($column) {
             case 'roadmap_client':
                 $org_id = null;
-                $org_title = null;
+                $org_shortcode = null;
 
                 // Try Pods first
                 if ($pod) {
@@ -119,11 +119,9 @@ class RoadmapColumns {
                         // Pods returns array for relationships
                         if (is_array($org) && !empty($org['ID'])) {
                             $org_id = $org['ID'];
-                            $org_title = $org['post_title'] ?? get_the_title($org_id);
                         } elseif (is_numeric($org)) {
                             // Might return just ID
                             $org_id = (int) $org;
-                            $org_title = get_the_title($org_id);
                         }
                     }
                 }
@@ -131,14 +129,16 @@ class RoadmapColumns {
                 // Fallback to raw meta if Pods didn't return anything
                 if (!$org_id) {
                     $org_id = get_post_meta($post_id, 'organization', true);
-                    if ($org_id) {
-                        $org_title = get_the_title($org_id);
-                    }
                 }
 
-                if ($org_id && $org_title) {
+                // Get shortcode from org
+                if ($org_id) {
+                    $org_shortcode = get_post_meta($org_id, 'organization_shortcode', true);
+                }
+
+                if ($org_id && $org_shortcode) {
                     $filter_url = admin_url('edit.php?post_type=roadmap_item&filter_roadmap_org=' . $org_id);
-                    echo '<a href="' . esc_url($filter_url) . '">' . esc_html($org_title) . '</a>';
+                    echo '<a href="' . esc_url($filter_url) . '" class="org-shortcode-link"><code class="org-shortcode">' . esc_html($org_shortcode) . '</code></a>';
                 } else {
                     echo '—';
                 }
@@ -287,6 +287,18 @@ class RoadmapColumns {
         echo '<option value="brad"' . selected($selected_submitter, 'brad', false) . '>Brad</option>';
         echo '<option value="client"' . selected($selected_submitter, 'client', false) . '>Clients</option>';
         echo '</select>';
+
+        // Priority filter
+        $selected_priority = isset($_GET['filter_roadmap_priority']) ? sanitize_text_field($_GET['filter_roadmap_priority']) : '';
+        $priorities = ['Low', 'Medium', 'High'];
+
+        echo '<select name="filter_roadmap_priority">';
+        echo '<option value="">All Priorities</option>';
+        foreach ($priorities as $priority) {
+            $selected = selected($selected_priority, $priority, false);
+            echo '<option value="' . esc_attr($priority) . '"' . $selected . '>' . esc_html($priority) . '</option>';
+        }
+        echo '</select>';
     }
 
     /**
@@ -345,6 +357,15 @@ class RoadmapColumns {
             }
         }
 
+        // Priority filter
+        if (!empty($_GET['filter_roadmap_priority'])) {
+            $meta_query[] = [
+                'key' => 'priority',
+                'value' => sanitize_text_field($_GET['filter_roadmap_priority']),
+                'compare' => '=',
+            ];
+        }
+
         if (!empty($meta_query)) {
             $query->set('meta_query', $meta_query);
         }
@@ -396,12 +417,27 @@ class RoadmapColumns {
                 text-decoration: underline;
             }
 
-            /* Column widths */
-            .column-roadmap_client { width: 150px; }
-            .column-roadmap_status { width: 130px; }
-            .column-roadmap_submitted_by { width: 150px; }
-            .column-roadmap_priority { width: 90px; }
-            .column-roadmap_adr { width: 70px; }
+            /* Column widths - balance title with other columns */
+            .post-type-roadmap_item .column-title { width: 25%; }
+            .column-roadmap_client { width: 100px; }
+            .column-roadmap_status { width: 120px; }
+            .column-roadmap_submitted_by { width: 130px; }
+            .column-roadmap_priority { width: 80px; }
+            .column-roadmap_adr { width: 60px; }
+
+            /* Shortcode styling */
+            .org-shortcode {
+                background: #f0f6fc;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 12px;
+            }
+            .org-shortcode-link {
+                text-decoration: none;
+            }
+            .org-shortcode-link:hover .org-shortcode {
+                background: #dbeafe;
+            }
         </style>';
     }
 }

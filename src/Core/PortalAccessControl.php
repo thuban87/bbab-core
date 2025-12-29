@@ -72,8 +72,15 @@ class PortalAccessControl {
             return;
         }
 
+        Logger::debug('PortalAccessControl', 'Protected page access check', [
+            'url' => $_SERVER['REQUEST_URI'] ?? '',
+            'logged_in' => is_user_logged_in(),
+            'user_id' => get_current_user_id(),
+        ]);
+
         // Admins always have access (including simulation mode)
         if (current_user_can('manage_options')) {
+            Logger::debug('PortalAccessControl', 'Admin access granted');
             return;
         }
 
@@ -89,6 +96,11 @@ class PortalAccessControl {
 
         // User is logged in - check if they have an organization
         $org_id = UserContext::getCurrentOrgId();
+        Logger::debug('PortalAccessControl', 'Checking user org', [
+            'user_id' => get_current_user_id(),
+            'org_id' => $org_id,
+        ]);
+
         if (!$org_id) {
             Logger::warning('PortalAccessControl', 'Authenticated user has no organization', [
                 'user_id' => get_current_user_id(),
@@ -183,7 +195,16 @@ class PortalAccessControl {
 
         // Check if user has an org
         $org_id = get_user_meta($user->ID, 'organization', true);
+        Logger::debug('PortalAccessControl', 'Post-login org check', [
+            'user_id' => $user->ID,
+            'org_id' => $org_id,
+            'is_admin' => user_can($user, 'manage_options'),
+        ]);
+
         if (!$org_id && !user_can($user, 'manage_options')) {
+            Logger::warning('PortalAccessControl', 'Login successful but user has no org', [
+                'user_id' => $user->ID,
+            ]);
             $this->renderAccessDenied('Your account is not associated with a client organization. Please contact support.');
             exit;
         }

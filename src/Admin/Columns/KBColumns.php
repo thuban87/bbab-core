@@ -88,7 +88,11 @@ class KBColumns {
 
             case 'client':
                 $client = self::getArticleClient($post_id);
-                echo $client ? esc_html($client) : '&mdash;';
+                if ($client) {
+                    echo '<code class="org-shortcode">' . esc_html($client) . '</code>';
+                } else {
+                    echo '&mdash;';
+                }
                 break;
         }
     }
@@ -120,12 +124,12 @@ class KBColumns {
     }
 
     /**
-     * Get the client/org name for a client-specific article.
+     * Get the client/org shortcode for a client-specific article.
      *
      * Matches the category slug against org shortcodes.
      *
      * @param int $post_id Post ID.
-     * @return string|null Org name or null if not client-specific.
+     * @return string|null Org shortcode or null if not client-specific.
      */
     public static function getArticleClient(int $post_id): ?string {
         $terms = get_the_terms($post_id, 'kb_category');
@@ -151,7 +155,7 @@ class KBColumns {
                     $shortcode = get_post_meta($org->ID, 'organization_shortcode', true);
 
                     if ($shortcode && stripos($slug, strtolower($shortcode)) !== false) {
-                        return $org->post_title;
+                        return $shortcode; // Return shortcode, not post_title
                     }
                 }
 
@@ -253,10 +257,18 @@ class KBColumns {
                 width: 120px;
             }
             .column-client {
-                width: 150px;
+                width: 100px;
             }
             .column-kb_categories {
                 width: 200px;
+            }
+
+            /* Shortcode styling */
+            .org-shortcode {
+                background: #f0f6fc;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 12px;
             }
         </style>';
     }
