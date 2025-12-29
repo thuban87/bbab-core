@@ -1,0 +1,79 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm production deployment'
+        required: true
+        default: ''
+
+jobs:
+  deploy-production:
+    name: Deploy to Production Server
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'deploy'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Pre-deployment backup reminder
+        run: |
+          echo "⚠️  REMINDER: Ensure you have a recent backup before deploying to production!"
+          echo "📋 Have you completed staging testing?"
+          echo "📋 Have you merged the PR to main?"
+
+      - name: Deploy to Production
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
+            cd ${{ secrets.PRODUCTION_PATH }}
+
+            # Fetch and checkout main branch
+            git fetch origin
+            git checkout main
+            git pull origin main
+
+            # Install/update dependencies
+            composer install --no-dev --optimize-autoloader
+
+            # Clear plugin transients
+            # Uncomment and adjust path if WP-CLI available:
+            # wp transient delete --all --path=/path/to/production/wordpress
+
+            echo "Production deployment complete: $(date)"
+          ENDSSH
+
+      - name: Deployment Status
+        run: |
+          echo "✅ Deployed 'main' branch to production"
+          echo "📍 Server: ${{ secrets.SSH_HOST }}"
+          echo "📂 Path: ${{ secrets.PRODUCTION_PATH }}"
+          echo ""
+          echo "🔍 Next steps:"
+          echo "   1. Verify site is working"
+          echo "   2. Clear any additional caches"
+          echo "   3. Run smoke tests"
+
+  rejected:
+    name: Deployment Cancelled
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm != 'deploy'
+    steps:
+      - name: Cancelled
+        run: |
+          echo "❌ Production deployment cancelled"
+          echo "   You must type 'deploy' to confirm"
+          exit 1

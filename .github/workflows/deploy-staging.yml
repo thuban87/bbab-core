@@ -1,0 +1,56 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'phase-*'
+      - 'fix/**'
+      - 'develop'
+    paths-ignore:
+      - '**.md'
+      - 'Documentation/**'
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to Staging
+        run: |
+          ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'ENDSSH'
+            cd ${{ secrets.STAGING_PATH }}
+
+            # Fetch and checkout the branch
+            git fetch origin
+            git checkout ${{ github.ref_name }}
+            git pull origin ${{ github.ref_name }}
+
+            # Install/update dependencies
+            composer install --no-dev --optimize-autoloader
+
+            # Clear caches (optional - uncomment if needed)
+            # wp transient delete --all --path=/path/to/staging/wordpress
+
+            echo "Staging deployment complete: $(date)"
+          ENDSSH
+
+      - name: Deployment Status
+        run: |
+          echo "✅ Deployed branch '${{ github.ref_name }}' to staging"
+          echo "📍 Server: ${{ secrets.SSH_HOST }}"
+          echo "📂 Path: ${{ secrets.STAGING_PATH }}"
