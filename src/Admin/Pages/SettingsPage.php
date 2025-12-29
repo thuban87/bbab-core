@@ -50,7 +50,6 @@ class SettingsPage {
 
         // AJAX handlers for maintenance tools
         add_action('wp_ajax_bbab_sc_check_forgotten_timers', [$this, 'handleForgottenTimerCheck']);
-        add_action('wp_ajax_bbab_sc_fetch_analytics', [$this, 'handleAnalyticsFetch']);
     }
 
     /**
@@ -854,50 +853,16 @@ class SettingsPage {
                 </td>
             </tr>
 
-            <tr>
-                <th scope="row">
-                    <?php esc_html_e('Manual Analytics Fetch', 'bbab-service-center'); ?>
-                </th>
-                <td>
-                    <p style="margin-bottom: 10px;">
-                        <?php esc_html_e('Manually fetch GA4 and PageSpeed data for a specific client. Normally runs twice daily via cron.', 'bbab-service-center'); ?>
-                    </p>
-
-                    <?php
-                    // Get all client orgs for the dropdown
-                    $orgs = get_posts([
-                        'post_type' => 'client_organization',
-                        'posts_per_page' => -1,
-                        'post_status' => 'publish',
-                        'orderby' => 'title',
-                        'order' => 'ASC',
-                    ]);
-                    ?>
-
-                    <select id="bbab-analytics-org" style="min-width: 250px;">
-                        <option value="">-- Select Client --</option>
-                        <?php foreach ($orgs as $org):
-                            $shortcode = get_post_meta($org->ID, 'organization_shortcode', true);
-                            $label = $shortcode ? $shortcode . ' - ' . $org->post_title : $org->post_title;
-                        ?>
-                            <option value="<?php echo esc_attr($org->ID); ?>"><?php echo esc_html($label); ?></option>
-                        <?php endforeach; ?>
-                    </select>
-
-                    <button type="button"
-                            id="bbab-fetch-analytics"
-                            class="button button-secondary"
-                            style="margin-left: 10px;">
-                        <?php esc_html_e('Fetch Analytics', 'bbab-service-center'); ?>
-                    </button>
-                    <span id="bbab-analytics-status" style="margin-left: 10px;"></span>
-
-                    <p class="description" style="margin-top: 8px;">
-                        <?php esc_html_e('Fetches GA4 data (visitors, page views, sources) and PageSpeed data (performance scores). This may take 30-60 seconds per client.', 'bbab-service-center'); ?>
-                    </p>
-                </td>
-            </tr>
         </table>
+
+        <div style="margin-top: 20px; padding: 15px; background: #f0f6fc; border-left: 4px solid #2271b1; border-radius: 4px;">
+            <strong><?php esc_html_e('Manual Analytics Fetch', 'bbab-service-center'); ?></strong>
+            <p style="margin: 8px 0 0 0;">
+                <?php esc_html_e('Use the', 'bbab-service-center'); ?>
+                <a href="<?php echo esc_url(admin_url('tools.php?page=client-health-dashboard')); ?>">Client Health Dashboard</a>
+                <?php esc_html_e('to manually fetch GA4 and PageSpeed data for specific clients.', 'bbab-service-center'); ?>
+            </p>
+        </div>
 
         <script>
         jQuery(document).ready(function($) {
@@ -1007,48 +972,6 @@ class SettingsPage {
                 });
             });
 
-            // Manual analytics fetch
-            $('#bbab-fetch-analytics').on('click', function() {
-                var $btn = $(this);
-                var $status = $('#bbab-analytics-status');
-                var $select = $('#bbab-analytics-org');
-                var orgId = $select.val();
-
-                if (!orgId) {
-                    $status.html('<span style="color: #b32d2e;">Please select a client.</span>');
-                    return;
-                }
-
-                $btn.prop('disabled', true);
-                $select.prop('disabled', true);
-                $status.html('<span style="color: #666;">Fetching analytics data... This may take 30-60 seconds.</span>');
-
-                $.ajax({
-                    url: ajaxurl,
-                    type: 'POST',
-                    timeout: 120000, // 2 minute timeout
-                    data: {
-                        action: 'bbab_sc_fetch_analytics',
-                        org_id: orgId,
-                        nonce: '<?php echo wp_create_nonce('bbab_sc_fetch_analytics'); ?>'
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            $status.html('<span style="color: #1e8449; font-weight: 500;">' + response.data.message + '</span>');
-                        } else {
-                            $status.html('<span style="color: #b32d2e;">Error: ' + (response.data.message || response.data) + '</span>');
-                        }
-                        $btn.prop('disabled', false);
-                        $select.prop('disabled', false);
-                    },
-                    error: function(xhr, status, error) {
-                        var msg = status === 'timeout' ? 'Request timed out. The fetch may still be running.' : 'Request failed.';
-                        $status.html('<span style="color: #b32d2e;">' + msg + '</span>');
-                        $btn.prop('disabled', false);
-                        $select.prop('disabled', false);
-                    }
-                });
-            });
         });
         </script>
         <?php
@@ -1071,112 +994,5 @@ class SettingsPage {
         $result = ForgottenTimerHandler::manualCheck();
 
         wp_send_json_success($result);
-    }
-
-    /**
-     * Handle AJAX request to manually fetch analytics for an organization.
-     */
-    public function handleAnalyticsFetch(): void {
-        if (!check_ajax_referer('bbab_sc_fetch_analytics', 'nonce', false)) {
-            wp_send_json_error(['message' => 'Security check failed']);
-            return;
-        }
-
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => 'Permission denied']);
-            return;
-        }
-
-        $org_id = isset($_POST['org_id']) ? absint($_POST['org_id']) : 0;
-        if (!$org_id) {
-            wp_send_json_error(['message' => 'No organization specified']);
-            return;
-        }
-
-        // Verify org exists
-        $org = get_post($org_id);
-        if (!$org || $org->post_type !== 'client_organization') {
-            wp_send_json_error(['message' => 'Invalid organization']);
-            return;
-        }
-
-        $org_name = $org->post_title;
-        $results = [];
-
-        // Get org meta
-        $ga4_property_id = get_post_meta($org_id, 'ga4_property_id', true);
-        $site_url = get_post_meta($org_id, 'site_url', true);
-
-        // Increase time limit for API calls
-        set_time_limit(120);
-
-        // Fetch GA4 data
-        if (!empty($ga4_property_id)) {
-            try {
-                $result = \BBAB\ServiceCenter\Modules\Analytics\GA4Service::fetchData($org_id);
-                $results['ga4_core'] = $result ? 'ok' : 'failed';
-            } catch (\Exception $e) {
-                $results['ga4_core'] = 'error: ' . $e->getMessage();
-            }
-
-            usleep(500000); // 0.5s delay
-
-            try {
-                $result = \BBAB\ServiceCenter\Modules\Analytics\GA4Service::fetchTopPages($org_id, 5);
-                $results['ga4_pages'] = $result ? 'ok' : 'failed';
-                usleep(300000);
-                \BBAB\ServiceCenter\Modules\Analytics\GA4Service::fetchTopPages($org_id, 10);
-            } catch (\Exception $e) {
-                $results['ga4_pages'] = 'error';
-            }
-
-            usleep(500000);
-
-            try {
-                $result = \BBAB\ServiceCenter\Modules\Analytics\GA4Service::fetchTrafficSources($org_id, 6);
-                $results['ga4_sources'] = $result ? 'ok' : 'failed';
-            } catch (\Exception $e) {
-                $results['ga4_sources'] = 'error';
-            }
-
-            usleep(500000);
-
-            try {
-                $result = \BBAB\ServiceCenter\Modules\Analytics\GA4Service::fetchDevices($org_id);
-                $results['ga4_devices'] = $result ? 'ok' : 'failed';
-            } catch (\Exception $e) {
-                $results['ga4_devices'] = 'error';
-            }
-        } else {
-            $results['ga4'] = 'skipped (no property ID)';
-        }
-
-        // Fetch PageSpeed data
-        if (!empty($site_url)) {
-            usleep(500000);
-
-            try {
-                $result = \BBAB\ServiceCenter\Modules\Analytics\PageSpeedService::fetchData($org_id);
-                $results['pagespeed'] = $result ? 'ok' : 'failed';
-            } catch (\Exception $e) {
-                $results['pagespeed'] = 'error: ' . $e->getMessage();
-            }
-        } else {
-            $results['pagespeed'] = 'skipped (no site URL)';
-        }
-
-        // Build summary message
-        $ok_count = count(array_filter($results, fn($v) => $v === 'ok'));
-        $total = count($results);
-        $message = "Completed for {$org_name}: {$ok_count}/{$total} successful.";
-
-        if (in_array('failed', $results) || count(array_filter($results, fn($v) => str_starts_with($v, 'error'))) > 0) {
-            $message .= ' Check debug.log for details.';
-        }
-
-        wp_send_json_success([
-            'message' => $message,
-            'results' => $results,
-        ]);
     }
 }

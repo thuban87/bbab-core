@@ -168,32 +168,73 @@ class MonthlyReportMetabox {
     public static function renderPDFMetabox(\WP_Post $post): void {
         $post_id = $post->ID;
 
-        // Get report PDF - can be stored as attachment ID or array from Pods
+        // Get report PDF - can be stored in various formats
         $pdf_url = null;
         $pdf_filename = null;
 
-        // Try Pods first
+        // Try Pods first (handles most modern attachments)
         if (function_exists('pods')) {
             $pod = pods('monthly_report', $post_id);
             if ($pod) {
                 $pdf = $pod->field('report_pdf');
-                if ($pdf && !empty($pdf['guid'])) {
-                    $pdf_url = $pdf['guid'];
-                    $pdf_filename = $pdf['post_title'] ?? basename($pdf_url);
-                } elseif ($pdf && !empty($pdf['ID'])) {
-                    $pdf_url = wp_get_attachment_url($pdf['ID']);
-                    $pdf_filename = get_the_title($pdf['ID']) ?: basename($pdf_url);
+
+                // Pods can return: array with guid, array with ID, just an ID, or URL string
+                if (is_array($pdf)) {
+                    if (!empty($pdf['guid'])) {
+                        $pdf_url = $pdf['guid'];
+                        $pdf_filename = $pdf['post_title'] ?? basename($pdf_url);
+                    } elseif (!empty($pdf['ID'])) {
+                        $pdf_url = wp_get_attachment_url($pdf['ID']);
+                        $pdf_filename = get_the_title($pdf['ID']) ?: basename($pdf_url);
+                    }
+                } elseif (is_numeric($pdf)) {
+                    // Just an attachment ID
+                    $pdf_url = wp_get_attachment_url((int) $pdf);
+                    if ($pdf_url) {
+                        $pdf_filename = get_the_title((int) $pdf) ?: basename($pdf_url);
+                    }
+                } elseif (is_string($pdf) && !empty($pdf)) {
+                    // Might be a URL string (old format) or an ID as string
+                    if (filter_var($pdf, FILTER_VALIDATE_URL)) {
+                        $pdf_url = $pdf;
+                        $pdf_filename = basename($pdf_url);
+                    } elseif (is_numeric($pdf)) {
+                        $pdf_url = wp_get_attachment_url((int) $pdf);
+                        if ($pdf_url) {
+                            $pdf_filename = get_the_title((int) $pdf) ?: basename($pdf_url);
+                        }
+                    }
                 }
             }
         }
 
-        // Fallback to raw meta
+        // Fallback to raw meta - handle multiple storage formats
         if (!$pdf_url) {
-            $pdf_id = get_post_meta($post_id, 'report_pdf', true);
-            if ($pdf_id) {
-                $pdf_url = wp_get_attachment_url($pdf_id);
-                if ($pdf_url) {
-                    $pdf_filename = get_the_title($pdf_id) ?: basename($pdf_url);
+            $pdf_meta = get_post_meta($post_id, 'report_pdf', true);
+
+            if (!empty($pdf_meta)) {
+                if (is_numeric($pdf_meta)) {
+                    // Attachment ID
+                    $pdf_url = wp_get_attachment_url((int) $pdf_meta);
+                    if ($pdf_url) {
+                        $pdf_filename = get_the_title((int) $pdf_meta) ?: basename($pdf_url);
+                    }
+                } elseif (is_string($pdf_meta) && filter_var($pdf_meta, FILTER_VALIDATE_URL)) {
+                    // Direct URL
+                    $pdf_url = $pdf_meta;
+                    $pdf_filename = basename($pdf_url);
+                } elseif (is_array($pdf_meta)) {
+                    // Serialized array (rare but possible)
+                    if (!empty($pdf_meta['guid'])) {
+                        $pdf_url = $pdf_meta['guid'];
+                        $pdf_filename = $pdf_meta['post_title'] ?? basename($pdf_url);
+                    } elseif (!empty($pdf_meta['ID'])) {
+                        $pdf_url = wp_get_attachment_url($pdf_meta['ID']);
+                        $pdf_filename = get_the_title($pdf_meta['ID']) ?: basename($pdf_url);
+                    } elseif (!empty($pdf_meta['url'])) {
+                        $pdf_url = $pdf_meta['url'];
+                        $pdf_filename = basename($pdf_url);
+                    }
                 }
             }
         }
