@@ -187,29 +187,26 @@ class PortalAccessControl {
             exit;
         }
 
-        // Login successful - redirect to the same page to load dashboard
+        // Login successful
         Logger::info('PortalAccessControl', 'Login successful', [
             'user_id' => $user->ID,
             'username' => $username,
         ]);
 
-        // Check if user has an org
+        // Set the current user for this request (wp_signon doesn't do this automatically)
+        wp_set_current_user($user->ID);
+
+        // Log org check for debugging
         $org_id = get_user_meta($user->ID, 'organization', true);
         Logger::debug('PortalAccessControl', 'Post-login org check', [
             'user_id' => $user->ID,
             'org_id' => $org_id,
+            'org_id_type' => gettype($org_id),
             'is_admin' => user_can($user, 'manage_options'),
         ]);
 
-        if (!$org_id && !user_can($user, 'manage_options')) {
-            Logger::warning('PortalAccessControl', 'Login successful but user has no org', [
-                'user_id' => $user->ID,
-            ]);
-            $this->renderAccessDenied('Your account is not associated with a client organization. Please contact support.');
-            exit;
-        }
-
-        // Redirect to requested page (or portal root)
+        // Always redirect after login - let checkAccess() handle org validation on next request
+        // This ensures cookies are fully set and avoids output buffering issues
         $redirect_to = $_POST['redirect_to'] ?? home_url('/client-dashboard/');
         wp_safe_redirect($redirect_to);
         exit;

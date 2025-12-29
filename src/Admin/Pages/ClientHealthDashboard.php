@@ -27,6 +27,7 @@ class ClientHealthDashboard {
      */
     public function register(): void {
         add_action('admin_menu', [$this, 'addMenuPage']);
+        add_action('wp_ajax_bbab_sc_fetch_single_analytics', [$this, 'handleSingleAnalyticsFetch']);
     }
 
     /**
@@ -191,34 +192,105 @@ class ClientHealthDashboard {
             <h2 class="bbab-section-header section-2">Section 2: Client Configuration Audit <span style="font-weight: normal; font-size: 13px; opacity: 0.9;">(Instant DB Reads)</span></h2>
             <div class="bbab-section-content">
 
-                <div style="margin-bottom: 20px; padding: 10px 15px; background: #f0fff4; border: 1px solid #9ae6b4; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong>Next Analytics Prefetch:</strong>
-                        <?php
-                        if ($next_analytics_run) {
-                            echo esc_html(wp_date('M j, Y @ g:ia', $next_analytics_run));
-                            echo ' &mdash; <em>in ' . esc_html(human_time_diff(time(), $next_analytics_run)) . '</em>';
-                        } else {
-                            echo '<span style="color: #c53030;">Not scheduled!</span> Ensure the Analytics Cron is active.';
-                        }
-                        ?>
-                        <span style="color: #666; font-size: 12px; margin-left: 10px;">(GA4 + PageSpeed data refreshed nightly)</span>
+                <div style="margin-bottom: 20px; padding: 10px 15px; background: #f0fff4; border: 1px solid #9ae6b4; border-radius: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <strong>Next Analytics Prefetch:</strong>
+                            <?php
+                            if ($next_analytics_run) {
+                                echo esc_html(wp_date('M j, Y @ g:ia', $next_analytics_run));
+                                echo ' &mdash; <em>in ' . esc_html(human_time_diff(time(), $next_analytics_run)) . '</em>';
+                            } else {
+                                echo '<span style="color: #c53030;">Not scheduled!</span> Ensure the Analytics Cron is active.';
+                            }
+                            ?>
+                            <span style="color: #666; font-size: 12px; margin-left: 10px;">(GA4 + PageSpeed data refreshed nightly)</span>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <form method="post" style="display: inline-block;">
+                                <?php wp_nonce_field('bbab_refresh_analytics'); ?>
+                                <button type="submit" name="refresh_analytics_now" class="button button-primary" onclick="return confirm('This will fetch fresh data from GA4 and PageSpeed APIs for all clients. This may take a minute. Continue?');">
+                                    Refresh All
+                                </button>
+                            </form>
+                            <form method="post" style="display: inline-block;">
+                                <?php wp_nonce_field('bbab_clear_analytics_cache'); ?>
+                                <button type="submit" name="clear_analytics_cache" class="button" onclick="return confirm('Clear all cached analytics data?');">
+                                    Clear Cache
+                                </button>
+                            </form>
+                        </div>
                     </div>
-                    <div style="display: flex; gap: 10px;">
-                        <form method="post" style="display: inline-block;">
-                            <?php wp_nonce_field('bbab_refresh_analytics'); ?>
-                            <button type="submit" name="refresh_analytics_now" class="button button-primary" onclick="return confirm('This will fetch fresh data from GA4 and PageSpeed APIs for all clients. This may take a minute. Continue?');">
-                                Refresh Analytics Now
-                            </button>
-                        </form>
-                        <form method="post" style="display: inline-block;">
-                            <?php wp_nonce_field('bbab_clear_analytics_cache'); ?>
-                            <button type="submit" name="clear_analytics_cache" class="button" onclick="return confirm('Clear all cached analytics data?');">
-                                Clear Analytics Cache
-                            </button>
-                        </form>
+
+                    <!-- Per-client Analytics Fetch -->
+                    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #9ae6b4; display: flex; align-items: center; gap: 10px;">
+                        <span style="font-weight: 500;">Fetch Single Client:</span>
+                        <select id="bbab-single-analytics-org" style="min-width: 200px;">
+                            <option value="">-- Select Client --</option>
+                            <?php foreach ($orgs as $org):
+                                $shortcode = get_post_meta($org->ID, 'organization_shortcode', true);
+                                $label = $shortcode ? $shortcode . ' - ' . $org->post_title : $org->post_title;
+                            ?>
+                                <option value="<?php echo esc_attr($org->ID); ?>"><?php echo esc_html($label); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button type="button" id="bbab-fetch-single-analytics" class="button">
+                            Fetch Analytics
+                        </button>
+                        <span id="bbab-single-analytics-status" style="font-size: 13px;"></span>
                     </div>
                 </div>
+
+                <script>
+                jQuery(document).ready(function($) {
+                    $('#bbab-fetch-single-analytics').on('click', function() {
+                        var $btn = $(this);
+                        var $status = $('#bbab-single-analytics-status');
+                        var $select = $('#bbab-single-analytics-org');
+                        var orgId = $select.val();
+
+                        if (!orgId) {
+                            $status.html('<span style="color: #c53030;">Please select a client.</span>');
+                            return;
+                        }
+
+                        var orgName = $select.find('option:selected').text();
+                        $btn.prop('disabled', true);
+                        $select.prop('disabled', true);
+                        $status.html('<span style="color: #666;">Fetching analytics for ' + orgName + '... (30-60 sec)</span>');
+
+                        $.ajax({
+                            url: ajaxurl,
+                            type: 'POST',
+                            timeout: 120000,
+                            data: {
+                                action: 'bbab_sc_fetch_single_analytics',
+                                org_id: orgId,
+                                nonce: '<?php echo wp_create_nonce('bbab_sc_fetch_single_analytics'); ?>'
+                            },
+                            success: function(response) {
+                                if (response.success) {
+                                    $status.html('<span style="color: #38a169; font-weight: 500;">' + response.data.message + '</span>');
+                                    // Reload page after 2 seconds to show updated cache times
+                                    setTimeout(function() {
+                                        location.reload();
+                                    }, 2000);
+                                } else {
+                                    $status.html('<span style="color: #c53030;">Error: ' + (response.data.message || response.data) + '</span>');
+                                    $btn.prop('disabled', false);
+                                    $select.prop('disabled', false);
+                                }
+                            },
+                            error: function(xhr, status, error) {
+                                var msg = status === 'timeout' ? 'Request timed out. The fetch may still be running.' : 'Request failed.';
+                                $status.html('<span style="color: #c53030;">' + msg + '</span>');
+                                $btn.prop('disabled', false);
+                                $select.prop('disabled', false);
+                            }
+                        });
+                    });
+                });
+                </script>
 
                 <table class="bbab-health-table">
                     <thead>
@@ -640,5 +712,118 @@ class ClientHealthDashboard {
             }
         </style>
         <?php
+    }
+
+    /**
+     * Handle AJAX request to fetch analytics for a single organization.
+     */
+    public function handleSingleAnalyticsFetch(): void {
+        if (!check_ajax_referer('bbab_sc_fetch_single_analytics', 'nonce', false)) {
+            wp_send_json_error(['message' => 'Security check failed']);
+            return;
+        }
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Permission denied']);
+            return;
+        }
+
+        $org_id = isset($_POST['org_id']) ? absint($_POST['org_id']) : 0;
+        if (!$org_id) {
+            wp_send_json_error(['message' => 'No organization specified']);
+            return;
+        }
+
+        // Verify org exists
+        $org = get_post($org_id);
+        if (!$org || $org->post_type !== 'client_organization') {
+            wp_send_json_error(['message' => 'Invalid organization']);
+            return;
+        }
+
+        $org_name = $org->post_title;
+        $results = [];
+
+        // Get org meta
+        $ga4_property_id = get_post_meta($org_id, 'ga4_property_id', true);
+        $site_url = get_post_meta($org_id, 'site_url', true);
+
+        // Increase time limit for API calls
+        set_time_limit(120);
+
+        // Fetch GA4 data
+        if (!empty($ga4_property_id)) {
+            try {
+                $result = GA4Service::fetchData($org_id);
+                $results['ga4_core'] = $result ? 'ok' : 'failed';
+            } catch (\Exception $e) {
+                $results['ga4_core'] = 'error: ' . $e->getMessage();
+            }
+
+            usleep(500000); // 0.5s delay
+
+            try {
+                $result = GA4Service::fetchTopPages($org_id, 5);
+                $results['ga4_pages'] = $result ? 'ok' : 'failed';
+                usleep(300000);
+                GA4Service::fetchTopPages($org_id, 10);
+            } catch (\Exception $e) {
+                $results['ga4_pages'] = 'error';
+            }
+
+            usleep(500000);
+
+            try {
+                $result = GA4Service::fetchTrafficSources($org_id, 6);
+                $results['ga4_sources'] = $result ? 'ok' : 'failed';
+            } catch (\Exception $e) {
+                $results['ga4_sources'] = 'error';
+            }
+
+            usleep(500000);
+
+            try {
+                $result = GA4Service::fetchDevices($org_id);
+                $results['ga4_devices'] = $result ? 'ok' : 'failed';
+            } catch (\Exception $e) {
+                $results['ga4_devices'] = 'error';
+            }
+        } else {
+            $results['ga4'] = 'skipped (no property ID)';
+        }
+
+        // Fetch PageSpeed data
+        if (!empty($site_url)) {
+            usleep(500000);
+
+            try {
+                $result = PageSpeedService::fetchData($org_id);
+                $results['pagespeed'] = $result ? 'ok' : 'failed';
+            } catch (\Exception $e) {
+                $results['pagespeed'] = 'error: ' . $e->getMessage();
+            }
+        } else {
+            $results['pagespeed'] = 'skipped (no site URL)';
+        }
+
+        // Build summary message
+        $ok_count = count(array_filter($results, fn($v) => $v === 'ok'));
+        $total = count($results);
+        $message = "Completed for {$org_name}: {$ok_count}/{$total} successful.";
+
+        if (in_array('failed', $results) || count(array_filter($results, fn($v) => str_starts_with((string) $v, 'error'))) > 0) {
+            $message .= ' Check debug.log for details.';
+        }
+
+        Logger::debug('ClientHealthDashboard', 'Single client analytics fetch completed', [
+            'org_id' => $org_id,
+            'org_name' => $org_name,
+            'results' => $results,
+        ]);
+
+        wp_send_json_success([
+            'message' => $message,
+            'results' => $results,
+        ]);
     }
 }
